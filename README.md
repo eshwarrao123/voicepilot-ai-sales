@@ -98,11 +98,12 @@ To enable persistent call records and private recording storage, configure your 
 2. Click **New Project**, choose an organization, set a project name (e.g. `voicepilot-sales`), and set a secure database password.
 3. Wait for the project infrastructure to provision.
 
-### 2. Enable Anonymous Sign-Ins
+### 2. Enable Anonymous Sign-Ins & Configure Security
 VoicePilot uses Supabase Anonymous Auth so internship assessors and demo users can interact immediately without entering an email or password:
 1. In your Supabase Dashboard, navigate to **Authentication** -> **Providers**.
 2. Scroll to the **Anonymous Sign-ins** provider.
 3. Toggle **Enable Anonymous Sign-ins** to **ON** and click **Save**.
+4. In **Authentication** -> **Security** (or **Bot Protection**), verify that **Enable Captcha protection** is turned OFF for local development/testing. Automated browser tests and local sign-ins without CAPTCHA widget tokens will be rejected if CAPTCHA is enforced.
 
 > **Note on Anonymous Sessions**: Anonymous identities are persisted in browser `localStorage`. Calls made in one browser profile are preserved across route changes and page refreshes. Clearing browser storage generates a fresh anonymous identity.
 
@@ -129,7 +130,8 @@ GEMINI_ANALYSIS_MODEL=gemini-3.8-flash
 
 # Supabase Public Configuration (Browser & Server)
 NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_public_key_here
+# Modern publishable key (or legacy NEXT_PUBLIC_SUPABASE_ANON_KEY)
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key_here
 ```
 
 ### Environment Variable Reference
@@ -140,7 +142,8 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_public_key_here
 | `GEMINI_LIVE_MODEL` | Server | Optional | Voice model for real-time Live WebSocket calls. Defaults to `gemini-3.8-live`. |
 | `GEMINI_ANALYSIS_MODEL` | Server | Optional | Text model for post-call structured intelligence. Defaults to `gemini-3.8-flash`. |
 | `NEXT_PUBLIC_SUPABASE_URL` | Client/Server | Yes | Your Supabase project URL (e.g. `https://xyz.supabase.co`). |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Client/Server | Yes | Your Supabase public anonymous/publishable key. Safe for browser usage under RLS. |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Client/Server | Yes | Modern Supabase publishable key (begins with `sb_publishable_`). Preferred over legacy anon key. |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Client/Server | Legacy | Backward-compatible fallback for existing Supabase anon keys. |
 
 > **Security Note**: Never expose `SUPABASE_SERVICE_ROLE_KEY` or `GEMINI_API_KEY` in client code. Row Level Security policies enforce that anonymous users can only access their own call rows and storage objects matching their `auth.uid()`.
 

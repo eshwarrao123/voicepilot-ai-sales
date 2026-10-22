@@ -1,4 +1,10 @@
-import { getSupabaseClient, isSupabaseConfigured, ensureAnonymousSession, dbRecordToCallRecord } from "@/lib/supabase/client";
+import {
+  getSupabaseClient,
+  isSupabaseConfigured,
+  ensureAnonymousSession,
+  getLastAuthError,
+  dbRecordToCallRecord,
+} from "@/lib/supabase/client";
 import type { CustomerInfo, ProductConfig, TranscriptMessage, CallRecord, DbCallRecord, PostCallAnalysis } from "@/types";
 
 export interface SaveCallParams {
@@ -60,9 +66,12 @@ export async function saveCompletedCall(params: SaveCallParams): Promise<Persist
   // 2. Ensure persistent anonymous user session
   const user = await ensureAnonymousSession();
   if (!user) {
+    const authErr = getLastAuthError();
     return {
       success: false,
-      error: "Unable to establish an anonymous Supabase user session for storage.",
+      error: authErr
+        ? `Unable to save call: Supabase authentication unavailable (${authErr}).`
+        : "Unable to establish an anonymous Supabase user session for storage.",
     };
   }
 
@@ -164,7 +173,7 @@ export async function saveCompletedCall(params: SaveCallParams): Promise<Persist
       .single();
 
     if (insertError) {
-      console.error("Failed to insert call record into Supabase:", insertError);
+      console.warn("[VoicePilot Supabase] Failed to insert call record:", insertError.message);
 
       // Attempt safe rollback of uploaded audio file if row insert fails
       if (recordingPath) {

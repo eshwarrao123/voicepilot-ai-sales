@@ -63,12 +63,44 @@ export function getSupabaseClient(): SupabaseClient | null {
   return browserClient;
 }
 
+let lastAuthError: string | null = null;
+let lastFailureTimestamp = 0;
+const AUTH_FAILURE_COOLDOWN_MS = 3000;
+
+export interface AnonymousSessionOptions {
+  /**
+   * If true, bypasses the failure cooldown and forces a fresh authentication attempt.
+   * Useful when retrying after updating configuration or dashboard settings.
+   */
+  forceRetry?: boolean;
+}
+
+/**
+ * Returns the most recent authentication error message, if any.
+ * Allows callers to display truthful, actionable error feedback in UI alerts.
+ */
+export function getLastAuthError(): string | null {
+  return lastAuthError;
+}
+
+/**
+ * Reset stored authentication error and cooldown state.
+ */
+export function clearLastAuthError(): void {
+  lastAuthError = null;
+  lastFailureTimestamp = 0;
+}
+
 /**
  * Ensure a persistent anonymous user session exists for this browser.
  * Deduplicates concurrent calls (e.g. React Strict Mode or parallel component mounts)
  * using a shared in-flight promise to prevent duplicate user account creation.
+ * Gracefully handles recoverable auth errors (e.g. dashboard CAPTCHA/disabled anonymous auth)
+ * without raising unhandled console errors or dev overlays.
  */
-export async function ensureAnonymousSession(): Promise<User | null> {
+export async function ensureAnonymousSession(
+  options: AnonymousSessionOptions = {}
+): Promise<User | null> {
   if (!isSupabaseConfigured()) {
     return null;
   }
@@ -76,9 +108,22 @@ export async function ensureAnonymousSession(): Promise<User | null> {
   const client = getSupabaseClient();
   if (!client) return null;
 
-  // If a sign-in or session check is already in-flight, return the shared promise
+  // If a sign-in or session check is already in-flight, reuse the shared promise
   if (sessionPromise) {
     return sessionPromise;
+  }
+
+  // If a recent attempt failed and forceRetry is not set, respect cooldown to prevent slamming the endpoint
+  if (
+    !options.forceRetry &&
+    lastAuthError &&
+    Date.now() - lastFailureTimestamp < AUTH_FAILURE_COOLDOWN_MS
+  ) {
+    return null;
+  }
+
+  if (options.forceRetry) {
+    clearLastAuthError();
   }
 
   sessionPromise = (async () => {
@@ -90,23 +135,38 @@ export async function ensureAnonymousSession(): Promise<User | null> {
       } = await client.auth.getSession();
 
       if (sessionError) {
-        console.warn("Supabase session retrieval warning:", sessionError.message);
+        console.warn("[VoicePilot Supabase] Session retrieval notice:", sessionError.message);
       }
 
       if (session?.user) {
+        lastAuthError = null;
+        lastFailureTimestamp = 0;
         return session.user;
       }
 
       // 2. Perform anonymous sign-in if no active session
       const { data, error: anonError } = await client.auth.signInAnonymously();
       if (anonError) {
-        console.error("Supabase anonymous sign-in failed:", anonError.message);
+        lastAuthError = anonError.message;
+        lastFailureTimestamp = Date.now();
+        console.warn(
+          "[VoicePilot Supabase] Anonymous sign-in unavailable:",
+          anonError.message
+        );
         return null;
       }
 
+      lastAuthError = null;
+      lastFailureTimestamp = 0;
       return data?.user ?? null;
-    } catch (err) {
-      console.error("Unexpected error initializing anonymous Supabase session:", err);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      lastAuthError = message;
+      lastFailureTimestamp = Date.now();
+      console.warn(
+        "[VoicePilot Supabase] Unexpected issue initializing anonymous session:",
+        message
+      );
       return null;
     } finally {
       sessionPromise = null;
@@ -133,13 +193,16 @@ export async function getSignedRecordingUrl(
       .createSignedUrl(path, expiresInSeconds);
 
     if (error || !data?.signedUrl) {
-      console.error("Failed to generate signed URL for recording:", error?.message);
+      console.warn(
+        "[VoicePilot Supabase] Failed to generate signed URL for recording:",
+        error?.message
+      );
       return null;
     }
 
     return data.signedUrl;
   } catch (err) {
-    console.error("Error generating signed recording URL:", err);
+    console.warn("[VoicePilot Supabase] Error generating signed recording URL:", err);
     return null;
   }
 }

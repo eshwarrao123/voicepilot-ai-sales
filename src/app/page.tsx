@@ -20,6 +20,7 @@ import {
   getSupabaseClient,
   isSupabaseConfigured,
   ensureAnonymousSession,
+  getLastAuthError,
   dbRecordToCallRecord,
 } from "@/lib/supabase/client";
 
@@ -41,7 +42,7 @@ export default function OverviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [unconfigured, setUnconfigured] = useState<boolean>(() => !isSupabaseConfigured());
 
-  const fetchOverviewData = useCallback(async () => {
+  const fetchOverviewData = useCallback(async (opts?: { forceRetry?: boolean }) => {
     if (!isSupabaseConfigured()) {
       setUnconfigured(true);
       setLoading(false);
@@ -53,9 +54,14 @@ export default function OverviewPage() {
     setUnconfigured(false);
 
     try {
-      const user = await ensureAnonymousSession();
+      const user = await ensureAnonymousSession({ forceRetry: opts?.forceRetry });
       if (!user) {
-        setError("Unable to establish anonymous session.");
+        const authErr = getLastAuthError();
+        setError(
+          authErr
+            ? `Supabase authentication unavailable: ${authErr}`
+            : "Unable to establish anonymous session."
+        );
         setLoading(false);
         return;
       }
@@ -95,7 +101,12 @@ export default function OverviewPage() {
         const user = await ensureAnonymousSession();
         if (!isMounted) return;
         if (!user) {
-          setError("Unable to establish anonymous session.");
+          const authErr = getLastAuthError();
+          setError(
+            authErr
+              ? `Supabase authentication unavailable: ${authErr}`
+              : "Unable to establish anonymous session."
+          );
           setLoading(false);
           return;
         }
@@ -188,7 +199,7 @@ export default function OverviewPage() {
             </p>
           </div>
           <button
-            onClick={() => void fetchOverviewData()}
+            onClick={() => void fetchOverviewData({ forceRetry: true })}
             disabled={loading}
             className="btn btn-secondary btn-sm"
             aria-label="Refresh dashboard data"
@@ -221,7 +232,7 @@ export default function OverviewPage() {
             </p>
             <p style={{ fontSize: "var(--font-size-xs)", color: "var(--ink-tertiary)", margin: 0, lineHeight: 1.5 }}>
               Dashboard metrics and persistent history require Supabase credentials. Configure{" "}
-              <code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> to enable live activity calculation.
+              <code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code> (or <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code>) to enable live activity calculation.
             </p>
           </div>
         </div>
@@ -247,7 +258,7 @@ export default function OverviewPage() {
             <span style={{ fontSize: "var(--font-size-xs)", color: "var(--status-error-ink)" }}>{error}</span>
           </div>
           <button
-            onClick={() => void fetchOverviewData()}
+            onClick={() => void fetchOverviewData({ forceRetry: true })}
             className="btn btn-secondary btn-sm"
             style={{ height: "26px", fontSize: "11px" }}
           >

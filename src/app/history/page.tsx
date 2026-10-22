@@ -24,6 +24,7 @@ import {
   getSupabaseClient,
   isSupabaseConfigured,
   ensureAnonymousSession,
+  getLastAuthError,
   getSignedRecordingUrl,
   dbRecordToCallRecord,
 } from "@/lib/supabase/client";
@@ -75,7 +76,7 @@ export default function HistoryPage() {
   const [retryingId, setRetryingId] = useState<string | null>(null);
 
   // Manual refresh handler
-  const fetchRecords = useCallback(async () => {
+  const fetchRecords = useCallback(async (opts?: { forceRetry?: boolean }) => {
     if (!isSupabaseConfigured()) {
       setUnconfigured(true);
       setLoading(false);
@@ -87,9 +88,14 @@ export default function HistoryPage() {
     setUnconfigured(false);
 
     try {
-      const user = await ensureAnonymousSession();
+      const user = await ensureAnonymousSession({ forceRetry: opts?.forceRetry });
       if (!user) {
-        setError("Could not establish an anonymous session with Supabase.");
+        const authErr = getLastAuthError();
+        setError(
+          authErr
+            ? `Supabase authentication unavailable: ${authErr}`
+            : "Could not establish an anonymous session with Supabase."
+        );
         setLoading(false);
         return;
       }
@@ -130,7 +136,12 @@ export default function HistoryPage() {
         const user = await ensureAnonymousSession();
         if (!isMounted) return;
         if (!user) {
-          setError("Could not establish an anonymous session with Supabase.");
+          const authErr = getLastAuthError();
+          setError(
+            authErr
+              ? `Supabase authentication unavailable: ${authErr}`
+              : "Could not establish an anonymous session with Supabase."
+          );
           setLoading(false);
           return;
         }
@@ -290,7 +301,7 @@ export default function HistoryPage() {
           </div>
           <div style={{ display: "flex", gap: "0.5rem" }}>
             <button
-              onClick={() => void fetchRecords()}
+              onClick={() => void fetchRecords({ forceRetry: true })}
               disabled={loading}
               className="btn btn-secondary btn-sm"
               aria-label="Refresh call records"
@@ -328,7 +339,7 @@ export default function HistoryPage() {
             </p>
             <p style={{ fontSize: "var(--font-size-xs)", color: "var(--ink-tertiary)", margin: "0 0 0.5rem", lineHeight: 1.5 }}>
               Persistent call storage and private audio recordings require Supabase. Please configure{" "}
-              <code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code> in your environment and run the SQL migration located in <code>supabase/migrations/</code>.
+              <code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code> (or <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code>) in your environment and run the SQL migration located in <code>supabase/migrations/</code>.
             </p>
             <Link href="/call" className="btn btn-secondary btn-sm">
               Try Local Call in Studio →
@@ -356,7 +367,11 @@ export default function HistoryPage() {
             <XCircle size={16} style={{ color: "var(--status-error-ink)" }} />
             <span style={{ fontSize: "var(--font-size-xs)", color: "var(--status-error-ink)" }}>{error}</span>
           </div>
-          <button onClick={() => void fetchRecords()} className="btn btn-secondary btn-sm" style={{ height: "26px", fontSize: "11px" }}>
+          <button
+            onClick={() => void fetchRecords({ forceRetry: true })}
+            className="btn btn-secondary btn-sm"
+            style={{ height: "26px", fontSize: "11px" }}
+          >
             Retry
           </button>
         </div>

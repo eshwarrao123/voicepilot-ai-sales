@@ -1,5 +1,10 @@
 import { test, expect } from "@playwright/test";
-import { dbRecordToCallRecord } from "../src/lib/supabase/client";
+import {
+  dbRecordToCallRecord,
+  clearLastAuthError,
+  getLastAuthError,
+  isSupabaseConfigured,
+} from "../src/lib/supabase/client";
 import type { DbCallRecord } from "../src/types";
 
 test.describe("Supabase RLS & Storage Specifications", () => {
@@ -93,5 +98,11 @@ test.describe("Supabase RLS & Storage Specifications", () => {
     expect(validOutcomes).toContain("not_interested");
     expect(validOutcomes).toContain("demo_requested");
     expect(validOutcomes).toContain("no_response");
+  });
+
+  test("Authentication error state helpers reset and return expected initial states", () => {
+    clearLastAuthError();
+    expect(getLastAuthError()).toBeNull();
+    expect(typeof isSupabaseConfigured()).toBe("boolean");
   });
 });

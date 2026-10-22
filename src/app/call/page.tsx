@@ -92,6 +92,7 @@ export default function LiveCallPage() {
   const [customer, setCustomer] = useState<CustomerInfo>(DEFAULT_CUSTOMER);
   const [productConfig, setProductConfig] = useState<ProductConfig>(DEFAULT_PRODUCT_CONFIG);
   const [recordingConsent, setRecordingConsent] = useState(false);
+  const [consentError, setConsentError] = useState<string | null>(null);
 
   // Persistence lifecycle states
   const [saveStatus, setSaveStatus] = useState<
@@ -222,6 +223,11 @@ export default function LiveCallPage() {
   }
 
   function handleStart() {
+    if (!recordingConsent) {
+      setConsentError("Explicit customer recording consent is required before initiating a call.");
+      return;
+    }
+    setConsentError(null);
     saveTriggeredRef.current = false;
     setSaveStatus("idle");
     setSaveNotice(null);
@@ -282,7 +288,7 @@ export default function LiveCallPage() {
       </header>
 
       {/* Error alert banner */}
-      {error && (
+      {(error || consentError) && (
         <div
           role="alert"
           style={{
@@ -322,12 +328,15 @@ export default function LiveCallPage() {
                   lineHeight: 1.4,
                 }}
               >
-                {error}
+                {consentError || error}
               </p>
             </div>
           </div>
           <button
-            onClick={clearError}
+            onClick={() => {
+              setConsentError(null);
+              clearError();
+            }}
             aria-label="Dismiss alert"
             style={{
               background: "transparent",
@@ -773,7 +782,10 @@ export default function LiveCallPage() {
                 type="checkbox"
                 checked={recordingConsent}
                 disabled={isActive || isConnecting}
-                onChange={(e) => setRecordingConsent(e.target.checked)}
+                onChange={(e) => {
+                  setRecordingConsent(e.target.checked);
+                  if (e.target.checked) setConsentError(null);
+                }}
                 style={{ marginTop: "3px", accentColor: "var(--accent-600)", width: "16px", height: "16px" }}
                 aria-describedby="consent-hint"
               />
