@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { GoogleGenAI, Modality } from "@google/genai";
-import type { LiveServerMessage } from "@google/genai";
+import { GoogleGenAI, Modality } from "@google/genai/web";
+import type { LiveServerMessage } from "@google/genai/web";
 import type { CustomerInfo, ProductConfig, TranscriptMessage, CallStatus } from "@/types";
 import { AudioMixer, RecordingResult } from "@/lib/audio/audioMixer";
 import { generateId } from "@/lib/utils";
@@ -32,6 +32,7 @@ export function useLiveSession() {
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const statusRef = useRef<CallStatus>("idle");
 
+  // Keep statusRef synchronized with current status state
   useEffect(() => {
     statusRef.current = status;
   }, [status]);
@@ -106,9 +107,13 @@ export function useLiveSession() {
       // If last message is customer and matching our active turn, append/update text
       if (lastMsg && lastMsg.id === activeId && lastMsg.speaker === "customer") {
         const updated = [...prev];
+        const separator =
+          text.startsWith(" ") || text.startsWith(",") || text.startsWith(".") || text.startsWith("!")
+            ? ""
+            : " ";
         updated[updated.length - 1] = {
           ...lastMsg,
-          text: lastMsg.text ? `${lastMsg.text} ${text.trim()}` : text.trim(),
+          text: `${lastMsg.text}${separator}${text.trim()}`,
           isInterim: !isFinished,
         };
         if (isFinished) {
@@ -151,9 +156,13 @@ export function useLiveSession() {
       // If last message is AI and matching our active turn, append/update text
       if (lastMsg && lastMsg.id === activeId && lastMsg.speaker === "ai") {
         const updated = [...prev];
+        const separator =
+          text.startsWith(" ") || text.startsWith(",") || text.startsWith(".") || text.startsWith("!")
+            ? ""
+            : " ";
         updated[updated.length - 1] = {
           ...lastMsg,
-          text: `${lastMsg.text} ${text.trim()}`,
+          text: `${lastMsg.text}${separator}${text.trim()}`,
           isInterim: !isFinished,
         };
         if (isFinished) {
@@ -215,7 +224,7 @@ export function useLiveSession() {
       let micStream: MediaStream | null = null;
 
       try {
-        // 1. Request real browser microphone
+        // 1. Request real browser microphone with echo cancellation
         micStream = await navigator.mediaDevices.getUserMedia({
           audio: {
             echoCancellation: true,
@@ -225,7 +234,7 @@ export function useLiveSession() {
         });
 
         // 2. Provision secure ephemeral token from our server route
-        setStatusDetail("Securing Gemini Live session credential…");
+        setStatusDetail("Provisioning ephemeral Gemini Live credential…");
         const tokenRes = await fetch("/api/live/token", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -251,7 +260,7 @@ export function useLiveSession() {
         mixer.startRecording();
         audioMixerRef.current = mixer;
 
-        // 4. Initialize Google Gen AI client with ephemeral token
+        // 4. Initialize Google Gen AI client with ephemeral token and v1alpha
         setStatusDetail("Connecting to Gemini Live WebSocket…");
         const ai = new GoogleGenAI({
           apiKey: token,
@@ -263,39 +272,8 @@ export function useLiveSession() {
           model,
           callbacks: {
             onopen: () => {
-              // Successfully connected!
-              setStatus("active");
-              setStatusDetail("Live Call in progress");
-
-              // Start elapsed timer
-              timerRef.current = setInterval(() => {
-                setElapsedSeconds((s) => s + 1);
-              }, 1000);
-
-              // Trigger initial AI salesperson greeting
-              try {
-                session.sendClientContent({
-                  turns: [
-                    {
-                      role: "user",
-                      parts: [
-                        {
-                          text: `[SYSTEM_EVENT: The call is now live with prospect ${
-                            customer.name || "the prospect"
-                          }${
-                            customer.company ? ` from ${customer.company}` : ""
-                          }. Please warmly introduce yourself as the AI sales assistant for ${
-                            product.name
-                          } and begin the conversation.]`,
-                        },
-                      ],
-                    },
-                  ],
-                  turnComplete: true,
-                });
-              } catch (sendErr) {
-                console.warn("Failed to trigger initial greeting:", sendErr);
-              }
+              // WebSocket opened; session setup is finalizing
+              setStatusDetail("Synchronizing Live session…");
             },
             onmessage: (msg: LiveServerMessage) => {
               // A. Interruption: user spoke over the AI
@@ -336,18 +314,24 @@ export function useLiveSession() {
             },
             onerror: (evt: unknown) => {
               console.error("Gemini Live session error:", evt);
-              setError("Live session disconnected unexpectedly.");
+              setError("Live session encountered an unexpected network error.");
               setStatus("error");
               setStatusDetail("Connection Error");
               void cleanupResources();
             },
-            onclose: () => {
+            onclose: (e?: { code?: number; reason?: string }) => {
               if (statusRef.current === "active") {
                 setStatus("ended");
                 setStatusDetail("Call Ended");
                 void cleanupResources().then((rec) => {
                   if (rec) setRecording(rec);
                 });
+              } else if (statusRef.current === "connecting") {
+                const reason = e?.reason || "Live session connection closed unexpectedly.";
+                setError(`Connection closed (code ${e?.code || "unknown"}): ${reason}`);
+                setStatus("error");
+                setStatusDetail("Connection Closed");
+                void cleanupResources();
               }
             },
           },
@@ -358,9 +342,17 @@ export function useLiveSession() {
           },
         });
 
+        // 6. Setup is complete and session instance is returned
         sessionRef.current = session;
+        setStatus("active");
+        setStatusDetail("Live with Prospect");
 
-        // 6. Connect microphone PCM stream to Gemini Live realtime input
+        // Start duration timer
+        timerRef.current = setInterval(() => {
+          setElapsedSeconds((s) => s + 1);
+        }, 1000);
+
+        // 7. Connect microphone PCM stream to Gemini Live realtime input
         mixer.onMicrophoneData((base64PCM16k) => {
           try {
             session.sendRealtimeInput({
@@ -373,6 +365,31 @@ export function useLiveSession() {
             // Session may be closing
           }
         });
+
+        // 8. Trigger initial AI salesperson greeting
+        try {
+          session.sendClientContent({
+            turns: [
+              {
+                role: "user",
+                parts: [
+                  {
+                    text: `[SYSTEM_EVENT: The call is now live with prospect ${
+                      customer.name || "the prospect"
+                    }${
+                      customer.company ? ` from ${customer.company}` : ""
+                    }. Please warmly introduce yourself as the AI sales assistant for ${
+                      product.name
+                    } and begin the conversation.]`,
+                  },
+                ],
+              },
+            ],
+            turnComplete: true,
+          });
+        } catch (sendErr) {
+          console.warn("Failed to trigger initial greeting:", sendErr);
+        }
       } catch (err: unknown) {
         console.error("Failed to start Live Call:", err);
         const e = err as { name?: string; message?: string };

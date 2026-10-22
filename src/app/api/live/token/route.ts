@@ -11,6 +11,29 @@ interface TokenRequestBody {
 // Maximum character length for untrusted text inputs
 const MAX_FIELD_LENGTH = 3000;
 
+// Low-complexity in-memory rate limiter for public assessment demo abuse prevention
+// Limits each client IP to 10 token requests per minute
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+const RATE_LIMIT_MAX = 10;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const record = rateLimitMap.get(ip);
+
+  if (!record || now > record.resetTime) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+
+  if (record.count >= RATE_LIMIT_MAX) {
+    return false;
+  }
+
+  record.count += 1;
+  return true;
+}
+
 function sanitize(input: unknown, fallback = ""): string {
   if (typeof input !== "string") return fallback;
   return input.trim().slice(0, MAX_FIELD_LENGTH);
@@ -53,6 +76,23 @@ SALES CONVERSATION RULES:
 
 export async function POST(req: NextRequest) {
   try {
+    // 1. Abuse protection: IP rate limiting
+    const clientIp =
+      req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      req.headers.get("x-real-ip") ||
+      "127.0.0.1";
+
+    if (!checkRateLimit(clientIp)) {
+      return NextResponse.json(
+        {
+          error:
+            "Rate limit exceeded: Too many token requests. Please wait a minute before starting another call.",
+        },
+        { status: 429 }
+      );
+    }
+
+    // 2. Secret check: GEMINI_API_KEY must exist on server
     const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey || apiKey.trim() === "") {
@@ -65,6 +105,20 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // 3. Model validation
+    const model = process.env.GEMINI_LIVE_MODEL?.trim() || "gemini-3.8-live";
+
+    // Ensure the configured model is genuinely a Live bidirectional model
+    if (!model.includes("live") && !model.includes("native-audio")) {
+      return NextResponse.json(
+        {
+          error: `Model "${model}" does not support Gemini Live bidirectional audio (bidiGenerateContent). Please set GEMINI_LIVE_MODEL=gemini-3.8-live in your .env.local file.`,
+        },
+        { status: 400 }
+      );
+    }
+
+    // 4. Request parsing and sanitization
     let body: TokenRequestBody = {};
     try {
       body = (await req.json()) as TokenRequestBody;
@@ -72,7 +126,6 @@ export async function POST(req: NextRequest) {
       // Body is optional; fallback to defaults
     }
 
-    // Merge provided product configuration with defaults and sanitize
     const rawProduct = body.product || {};
     const productConfig: ProductConfig = {
       name: sanitize(rawProduct.name, DEFAULT_PRODUCT_CONFIG.name),
@@ -86,18 +139,14 @@ export async function POST(req: NextRequest) {
 
     const systemInstruction = buildSystemInstruction(productConfig, body.customer);
 
-    // Initial default live model per prompt recommendation
-    const model = process.env.GEMINI_LIVE_MODEL || "gemini-3.8-live";
-
-    // Initialize the official Google Gen AI SDK
+    // 5. Initialize the official Google Gen AI SDK for token provisioning
     const ai = new GoogleGenAI({
       apiKey,
       httpOptions: { apiVersion: "v1alpha" },
     });
 
-    // Create an ephemeral token with single-use and tight session expiration
-    // Ephemeral tokens allow the browser to connect to the Gemini Live WebSocket directly
-    // without ever exposing the permanent GEMINI_API_KEY.
+    // 6. Create ephemeral authentication token
+    // Single-use token (uses: 1) locked to the selected Live model and audio modality
     const token = await ai.authTokens.create({
       config: {
         uses: 1, // Single-use session token
@@ -110,7 +159,7 @@ export async function POST(req: NextRequest) {
             speechConfig: {
               voiceConfig: {
                 prebuiltVoiceConfig: {
-                  voiceName: "Aoede", // Warm, clear conversational tone
+                  voiceName: "Aoede", // Warm, articulate conversational persona
                 },
               },
             },
@@ -125,9 +174,10 @@ export async function POST(req: NextRequest) {
     });
 
     if (!token || !token.name) {
-      throw new Error("SDK did not return a valid ephemeral token identifier.");
+      throw new Error("Google Gen AI SDK did not return a valid ephemeral token name.");
     }
 
+    // Return only the temporary token and model name — NEVER the permanent key
     return NextResponse.json({
       token: token.name,
       model,
