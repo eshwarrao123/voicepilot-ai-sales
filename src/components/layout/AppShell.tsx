@@ -114,16 +114,43 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             borderTop: "1px solid var(--border-subtle)",
           }}
         >
-          <p
+          <div
             style={{
-              fontSize: "var(--font-size-xs)",
-              color: "var(--ink-disabled)",
-              lineHeight: 1.4,
+              display: "flex",
+              alignItems: "center",
+              gap: "0.375rem",
+              marginBottom: "2px",
             }}
           >
-            Phase 1 — Interface only.
-            <br />
-            Voice &amp; AI integration in Phase 2.
+            <span
+              style={{
+                width: "6px",
+                height: "6px",
+                borderRadius: "50%",
+                background: "var(--call-live)",
+                display: "inline-block",
+              }}
+              aria-hidden="true"
+            />
+            <span
+              style={{
+                fontSize: "11px",
+                fontWeight: 600,
+                color: "var(--ink-secondary)",
+              }}
+            >
+              Voice Engine &amp; Storage Active
+            </span>
+          </div>
+          <p
+            style={{
+              fontSize: "11px",
+              color: "var(--ink-tertiary)",
+              lineHeight: 1.35,
+              margin: 0,
+            }}
+          >
+            Gemini Live &bull; Supabase RLS
           </p>
         </div>
       </nav>

@@ -1,21 +1,81 @@
 # VoicePilot — AI Sales Studio
 
-VoicePilot is an AI-powered voice sales assistant built for the Sankar Group internship assessment. It conducts real, bidirectional voice conversations with prospects, displays a live speech transcript, records calls with customer consent into a combined dual-track audio file, provides immediate audio playback/download, and establishes the foundation for AI summaries and sales outcome classification.
+VoicePilot is a complete, data-driven AI voice sales application built for the Sankar Group internship assessment. It conducts genuine, bidirectional real-time voice conversations with prospects, displays live transcripts, records dual-participant audio with consent, securely persists call records and private recordings in Supabase under Row Level Security, generates structured post-call intelligence using Gemini, and provides real activity metrics and call history.
 
 ---
 
 ## Technology Stack
 
-| Layer | Choice |
+| Layer | Implementation |
 |---|---|
 | Framework | Next.js 16 (App Router, Turbopack) |
 | Language | TypeScript 5 |
-| Styling | Tailwind CSS v4 + CSS Design System |
-| Icons | lucide-react |
-| Voice AI | Official `@google/genai` SDK — Gemini Live WebSocket |
-| Audio Pipeline | Web Audio API (PCM 16kHz capture, 24kHz playback, mixer) + MediaRecorder |
-| Persistence | Supabase PostgreSQL + Storage *(Phase 3)* |
-| Deployment | Vercel *(planned)* |
+| Styling | Tailwind CSS v4 + Vanilla CSS Design System |
+| Real-Time Voice | Official `@google/genai` SDK — Gemini Live WebSocket (`gemini-3.8-live`, `v1alpha`) |
+| Audio Pipeline | Web Audio API (16kHz PCM downsampler, 24kHz gapless playback queue, mixer) + `MediaRecorder` |
+| Database & RLS | Supabase PostgreSQL with Row Level Security (RLS) policies |
+| Authentication | Supabase Anonymous Auth (browser session persistence without registration forms) |
+| Audio Storage | Private Supabase Storage bucket (`call-recordings`) with short-lived signed URLs |
+| Sales Intelligence | Gemini (`gemini-3.8-flash`) server-side structured JSON analysis |
+| Testing | Playwright E2E and component specification test suite |
+
+---
+
+## Architecture & Data Flow
+
+```
++-----------------------------------------------------------------------------------------+
+|                                    BROWSER CLIENT                                       |
+|                                                                                         |
+|  [Microphone 16kHz PCM]   --->   useLiveSession (WebSocket)   <---   [Gemini Live Audio]|
+|           |                                                                 |           |
+|           +----------------->   AudioMixer (Combined Stream) <--------------+           |
+|                                            |                                            |
+|                                   MediaRecorder (.webm)                                 |
+|                                            |                                            |
+|                                  Call Ended Trigger                                     |
++--------------------------------------------|--------------------------------------------+
+                                             |
+             +-------------------------------+-------------------------------+
+             |                                                               |
+             v                                                               v
++--------------------------+                                    +--------------------------+
+|  Supabase Storage Bucket |                                    | Next.js Route Handler    |
+|     (call-recordings)    |                                    |   (/api/calls/analyze)   |
+|                          |                                    |                          |
+|  Upload dual-track audio |                                    | Structured text analysis |
+|  Path: {uid}/{callId}    |                                    | Model: gemini-3.8-flash  |
+|  Strict RLS Access       |                                    | Enforce 6 typed outcomes |
++--------------------------+                                    +--------------------------+
+             |                                                               |
+             +-------------------------------+-------------------------------+
+                                             |
+                                             v
+                          +------------------------------------+
+                          |       Supabase PostgreSQL          |
+                          |          (call_records)            |
+                          |                                    |
+                          |  - Call metadata & timestamps      |
+                          |  - Full transcript JSONB           |
+                          |  - Storage recording path          |
+                          |  - AI summary, needs & objections  |
+                          |  - Permitted sales outcome         |
+                          |  - Owner-scoped RLS policies       |
+                          +------------------------------------+
+                                             |
+                   +-------------------------+-------------------------+
+                   |                                                   |
+                   v                                                   v
+        +----------------------+                            +----------------------+
+        |     Overview (/)     |                            |  Call History (/history) |
+        |                      |                            |                      |
+        | - Total Calls count  |                            | - Filterable records |
+        | - Conversion rate    |                            | - Full transcripts   |
+        | - Interested leads   |                            | - AI summaries       |
+        | - Follow-ups needed  |                            | - Signed audio player|
+        | - Recent calls list  |                            | - Download actions   |
+        +----------------------+                            +----------------------+
+```
 
 ---
 
@@ -25,169 +85,138 @@ VoicePilot is an AI-powered voice sales assistant built for the Sankar Group int
 - npm ≥ 10
 - A modern desktop or mobile browser with microphone support (Chrome, Edge, Safari, Firefox)
 - A Google Gemini API key from [Google AI Studio](https://aistudio.google.com/apikey)
+- A free [Supabase](https://supabase.com) account and project
 
 ---
 
-## Installation
+## Manual Supabase Setup Guide
 
-```bash
-git clone https://github.com/eshwarrao123/voicepilot-ai-sales.git
-cd voicepilot-ai-sales
-npm install
-```
+To enable persistent call records and private recording storage, configure your Supabase project in the Supabase Dashboard:
+
+### 1. Create a Supabase Project
+1. Log in to [Supabase](https://supabase.com/dashboard).
+2. Click **New Project**, choose an organization, set a project name (e.g. `voicepilot-sales`), and set a secure database password.
+3. Wait for the project infrastructure to provision.
+
+### 2. Enable Anonymous Sign-Ins
+VoicePilot uses Supabase Anonymous Auth so internship assessors and demo users can interact immediately without entering an email or password:
+1. In your Supabase Dashboard, navigate to **Authentication** -> **Providers**.
+2. Scroll to the **Anonymous Sign-ins** provider.
+3. Toggle **Enable Anonymous Sign-ins** to **ON** and click **Save**.
+
+> **Note on Anonymous Sessions**: Anonymous identities are persisted in browser `localStorage`. Calls made in one browser profile are preserved across route changes and page refreshes. Clearing browser storage generates a fresh anonymous identity.
+
+### 3. Apply the Database Migration
+1. In your Supabase Dashboard, open the **SQL Editor** from the left navigation.
+2. Click **New Query**.
+3. Open the migration file in this repository:
+   `supabase/migrations/20261022153000_call_records_and_storage.sql`
+4. Copy the entire contents of that SQL file into the SQL Editor.
+5. Click **Run** to execute the script.
+6. Verify in **Table Editor** that `public.call_records` exists, and in **Storage** that the private bucket `call-recordings` was created.
 
 ---
 
 ## Environment Configuration
 
-Create a `.env.local` file in the project root:
-
-```bash
-cp .env.example .env.local
-```
-
-Add your Gemini API key:
+Configure the required variables in your local environment file (e.g. `.env.local`):
 
 ```dotenv
+# Gemini API credentials (Server-Side Only)
 GEMINI_API_KEY=your_actual_gemini_api_key_here
 GEMINI_LIVE_MODEL=gemini-3.8-live
+GEMINI_ANALYSIS_MODEL=gemini-3.8-flash
+
+# Supabase Public Configuration (Browser & Server)
+NEXT_PUBLIC_SUPABASE_URL=https://your-project-id.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_public_key_here
 ```
 
-| Variable | Required | Description |
-|---|---|---|
-| `GEMINI_API_KEY` | Yes (Phase 2) | Server-side only. Used exclusively by `/api/live/token` to mint short-lived ephemeral tokens. Never bundled into browser assets. |
-| `GEMINI_LIVE_MODEL` | Optional | Defaults to `gemini-3.8-live`. Can be set to `gemini-2.0-flash-exp` or other supported Live models. |
-| `NEXT_PUBLIC_SUPABASE_URL` | Phase 3 | Supabase project URL for database persistence. |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Phase 3 | Supabase public anon key. |
-| `SUPABASE_SERVICE_ROLE_KEY` | Phase 3 | Server-side key for storage uploads and summary jobs. |
+### Environment Variable Reference
 
-> `.env.local` is excluded from Git via `.gitignore`. Do **not** commit real credentials.
+| Variable | Scope | Required | Description |
+|---|---|---|---|
+| `GEMINI_API_KEY` | Server | Yes | Used exclusively by `/api/live/token` and `/api/calls/analyze`. Never exposed to client bundles. |
+| `GEMINI_LIVE_MODEL` | Server | Optional | Voice model for real-time Live WebSocket calls. Defaults to `gemini-3.8-live`. |
+| `GEMINI_ANALYSIS_MODEL` | Server | Optional | Text model for post-call structured intelligence. Defaults to `gemini-3.8-flash`. |
+| `NEXT_PUBLIC_SUPABASE_URL` | Client/Server | Yes | Your Supabase project URL (e.g. `https://xyz.supabase.co`). |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Client/Server | Yes | Your Supabase public anonymous/publishable key. Safe for browser usage under RLS. |
+
+> **Security Note**: Never expose `SUPABASE_SERVICE_ROLE_KEY` or `GEMINI_API_KEY` in client code. Row Level Security policies enforce that anonymous users can only access their own call rows and storage objects matching their `auth.uid()`.
 
 ---
 
-## Local Development
+## Local Development & Validation
 
+### Start the Next.js Application
 ```bash
 npm run dev
 ```
-
 Open [http://localhost:3000](http://localhost:3000).
 
----
+### Run Verification & Quality Checks
+```bash
+# Type check TypeScript definitions
+npx tsc --noEmit
 
-## Available Scripts
+# Run ESLint validation
+npm run lint
 
-| Command | Description |
-|---|---|
-| `npm run dev` | Start development server with Turbopack |
-| `npm run build` | Build production bundle |
-| `npm run start` | Serve production build |
-| `npm run lint` | Run ESLint check |
+# Build optimized production bundle
+npm run build
 
----
-
-## Project Structure
-
-```
-src/
-├── app/
-│   ├── api/
-│   │   └── live/
-│   │       └── token/
-│   │           └── route.ts  # Ephemeral token provisioning route (server-side only)
-│   ├── layout.tsx            # Root layout with Inter font and AppShell
-│   ├── globals.css           # Design tokens, accessible component classes
-│   ├── page.tsx              # Overview dashboard
-│   ├── call/
-│   │   ├── layout.tsx        # Call studio metadata
-│   │   └── page.tsx          # Live Call Studio (real voice session UI)
-│   ├── history/
-│   │   └── page.tsx          # Call History view
-│   └── setup/
-│       ├── layout.tsx        # Product setup metadata
-│       └── page.tsx          # Product Setup form (FlowDesk configuration)
-├── components/
-│   └── layout/
-│       └── AppShell.tsx      # Persistent responsive navigation
-├── hooks/
-│   └── useLiveSession.ts     # Complete Gemini Live session coordinator & lifecycle hook
-├── lib/
-│   ├── audio/
-│   │   ├── pcm.ts            # Float32 <-> Int16 PCM conversions, downsampling, base64
-│   │   └── audioMixer.ts     # Web Audio mixer, 24kHz playback, combined MediaRecorder
-│   ├── constants.ts          # Navigation items, storage keys, badge styles
-│   └── utils.ts              # Formatters and ID generators
-└── types/
-    └── index.ts              # Domain types: ProductConfig, CallRecord, SalesOutcome, etc.
+# Execute Playwright browser test suite
+npx playwright test
 ```
 
 ---
 
-## Implemented Capabilities (Phases 1 & 2)
+## Verifying a Completed Voice Call End-to-End
 
-- [x] **Secure Ephemeral Token Provisioning (`/api/live/token`)**:
-  - The permanent `GEMINI_API_KEY` stays on the server.
-  - Ephemeral tokens are minted using `@google/genai` `ai.authTokens.create` with `uses: 1` and 30-minute expiration.
-  - Constraints lock in audio response modalities, natural voice configuration (`Aoede`), and transcription configs.
-- [x] **Dynamic AI Salesperson Persona**:
-  - Automatically loads the configured product from the Product Setup page (FlowDesk by default).
-  - Prompts the model to introduce itself as an AI sales assistant, ask discovery questions, handle objections strictly based on confirmed product facts, and steer toward the call to action.
-- [x] **Bidirectional Audio Engine**:
-  - Captures browser microphone, downsamples to 16kHz 16-bit linear PCM, and streams real-time audio chunks via WebSocket.
-  - Decodes and plays incoming 24kHz PCM audio chunks gaplessly using the Web Audio API.
-  - Automatic barge-in / interruption handling: immediately cancels queued audio playback when the customer speaks over the AI.
-- [x] **Live Speech Transcription**:
-  - Displays real-time customer and AI speech in a dedicated conversational transcript panel.
-  - Distinguishes streaming / interim speech with an active speaking indicator.
-- [x] **Recording Consent Enforcement**:
-  - Mandatory confirmation checkbox: *"I confirm that the customer has been informed and has explicitly consented to this call being recorded."*
-  - The call cannot be started without explicit consent.
-- [x] **Dual-Participant Recording**:
-  - Uses a Web Audio `MediaStreamAudioDestinationNode` to mix the customer's microphone stream and the AI's playback audio into a single unified stream.
-  - The user's microphone is **not** looped back to their speakers (preventing echo/feedback).
-  - MediaRecorder records the mixed stream into a playable `.webm` file.
-  - HTML audio player preview and one-click download after call completion.
-
----
-
-## Reserved for Future Phases
-
-### Phase 3 — Database Persistence & AI Analysis
-- Store completed call records and transcripts in Supabase PostgreSQL (`call_records` table).
-- Automatically upload recorded `.webm` audio files to private Supabase Storage buckets with signed URL playback.
-- Run post-call LLM analysis to generate structured call summaries, customer needs, and objection logs.
-- Classify final sales outcome into one of the 6 typed categories (`Converted`, `Interested`, `Follow-up Required`, `Not Interested`, `Demo Requested`, `No Response`).
-- Populate the Call History page with searchable, filterable call records.
-
-### Phase 4 — Production Polish & Deployment
-- Deploy to Vercel with environment variables.
-- User authentication and role-based access.
-
----
-
-## How to Test the Voice Engine
-
-1. **Verify Credentials**:
-   - Ensure `GEMINI_API_KEY` is set in your `.env.local` file.
-   - If not set, clicking "Start Call" will cleanly report that the key is missing without crashing or faking a connection.
-2. **Launch Development Server**:
-   ```bash
-   npm run dev
-   ```
-3. **Open Live Call Studio**:
-   - Navigate to [http://localhost:3000/call](http://localhost:3000/call).
-   - Enter a prospect name (e.g., "Sarah Chen").
-   - Check the **Recording Consent** checkbox.
-   - Click **Start Call**.
-4. **Grant Microphone Permission**:
-   - The browser will prompt for microphone access. Allow it.
-5. **Conduct Voice Conversation**:
-   - The AI will introduce itself ("Hello Sarah! I'm Alex, an AI sales assistant with FlowDesk...").
-   - Speak into your microphone to respond.
-   - Watch the transcript stream live with customer speech and AI speech.
-   - Try interrupting the AI while it speaks to verify barge-in.
-6. **End Call & Verify Recording**:
+1. **Product Setup**:
+   - Navigate to **Product Setup** (`/setup`) to customize the product pitch, objections, and call-to-action (defaults to FlowDesk).
+2. **Start Live Call**:
+   - Go to **Live Call Studio** (`/call`).
+   - Enter prospect name (e.g. "Sarah Chen") and company.
+   - Confirm **Recording Consent** and click **Start Call**.
+   - Speak with the AI salesperson Alex and discuss features and objections.
+3. **End & Persist**:
    - Click **End Call**.
-   - Review the completed call recording card:
-     - Listen to the playback preview in the `<audio>` player to hear both your voice and the AI's voice.
-     - Click **Download Recording (.webm)** to verify the downloaded file is playable.
+   - Watch the persistence lifecycle:
+     - Saving state indicator appears.
+     - Mixed dual-track audio (`.webm`) uploads to private storage `{owner_id}/{call_id}.webm`.
+     - Server triggers structured post-call analysis via `gemini-3.8-flash`.
+     - Full record is saved to `call_records`.
+     - Sales Intelligence card displays outcome badge, summary, needs, and next steps.
+4. **Call History & Playback**:
+   - Navigate to **Call History** (`/history`).
+   - The saved record appears immediately.
+   - Expand the record to view the chronological transcript and AI intelligence.
+   - Click to play the audio: VoicePilot generates a short-lived signed URL (valid for 1 hour).
+   - Test date and outcome filters.
+5. **Overview Metrics**:
+   - Navigate to **Overview** (`/`).
+   - Total Calls, Conversion Rate, Interested Leads, and Follow-ups Needed reflect the actual saved database records.
+
+---
+
+## Sales Outcome Classification Rules
+
+Post-call intelligence enforces strict classification into one of six domain categories:
+
+| Outcome | Criteria |
+|---|---|
+| `converted` | The customer explicitly agreed to purchase or committed to buy on the call. |
+| `interested` | The customer expressed clear interest but has not yet booked a demo or finalized purchase. |
+| `demo_requested` | The customer explicitly agreed to or requested a demonstration or product walkthrough. |
+| `follow_up_required` | A follow-up call, email, or meeting was identified as the required next step. |
+| `not_interested` | The customer explicitly declined, expressed lack of fit, or rejected the pitch. |
+| `no_response` | The call connected, but no verbal customer response was captured (handled deterministically). |
+
+---
+
+## Partial Failure Resiliency
+
+- **Analysis Failure**: If an AI request fails or times out, the call record and recording are still safely preserved with `analysis_status = 'failed'`. A **Retry Analysis** action is provided on both the Call Studio page and Call History.
+- **Unconfigured Supabase**: If Supabase credentials have not been configured, the application degrades gracefully. The call audio and transcript remain playable in local browser session memory, with clear instructions to configure environment keys.
+- **Rollback Protection**: If database insertion fails after storage upload, VoicePilot attempts safe rollback of the orphaned storage file.

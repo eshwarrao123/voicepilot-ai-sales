@@ -25,6 +25,7 @@ export function useLiveSession() {
   const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [recording, setRecording] = useState<RecordingResult | null>(null);
+  const [startedAt, setStartedAt] = useState<string | null>(null);
 
   // References to keep active media and session handles across re-renders
   const audioMixerRef = useRef<AudioMixer | null>(null);
@@ -49,7 +50,7 @@ export function useLiveSession() {
     }
   }, []);
 
-  // Teardown everything idempotently
+  // Teardown everything idempotently and finalize transcript
   const cleanupResources = useCallback(async () => {
     stopTimer();
 
@@ -82,6 +83,11 @@ export function useLiveSession() {
     activeCustomerMessageIdRef.current = null;
     activeAiMessageIdRef.current = null;
 
+    // Clear any dangling interim speaking indicators
+    setTranscript((prev) =>
+      prev.map((m) => (m.isInterim ? { ...m, isInterim: false } : m))
+    );
+
     return recordingResult;
   }, [stopTimer]);
 
@@ -93,6 +99,33 @@ export function useLiveSession() {
       }
     };
   }, [cleanupResources]);
+
+  /**
+   * Helper to normalize concatenated speech text without duplicate chunks or broken punctuation
+   */
+  const appendChunkToMessage = (currentText: string, chunk: string): string => {
+    const trimmedChunk = chunk.trim();
+    if (!trimmedChunk) return currentText;
+    if (trimmedChunk === currentText) return currentText;
+
+    // If chunk already starts with currentText (cumulative server stream)
+    if (trimmedChunk.startsWith(currentText)) {
+      return trimmedChunk;
+    }
+
+    // If currentText already ends with this chunk, do not duplicate
+    if (currentText.endsWith(trimmedChunk)) {
+      return currentText;
+    }
+
+    // Incremental chunk: determine if a space separator is required
+    const needsSpace =
+      currentText.length > 0 &&
+      !/[\s([{/-]$/.test(currentText) &&
+      !/^[\s,.:;!?)\]}/-]/.test(chunk);
+
+    return `${currentText}${needsSpace ? " " : ""}${trimmedChunk}`;
+  };
 
   /**
    * Handle incoming transcription text chunks from customer
@@ -107,13 +140,9 @@ export function useLiveSession() {
       // If last message is customer and matching our active turn, append/update text
       if (lastMsg && lastMsg.id === activeId && lastMsg.speaker === "customer") {
         const updated = [...prev];
-        const separator =
-          text.startsWith(" ") || text.startsWith(",") || text.startsWith(".") || text.startsWith("!")
-            ? ""
-            : " ";
         updated[updated.length - 1] = {
           ...lastMsg,
-          text: `${lastMsg.text}${separator}${text.trim()}`,
+          text: appendChunkToMessage(lastMsg.text, text),
           isInterim: !isFinished,
         };
         if (isFinished) {
@@ -127,7 +156,6 @@ export function useLiveSession() {
       if (!isFinished) {
         activeCustomerMessageIdRef.current = newId;
       }
-      // Since customer is speaking, AI's previous turn is done
       activeAiMessageIdRef.current = null;
 
       return [
@@ -156,13 +184,9 @@ export function useLiveSession() {
       // If last message is AI and matching our active turn, append/update text
       if (lastMsg && lastMsg.id === activeId && lastMsg.speaker === "ai") {
         const updated = [...prev];
-        const separator =
-          text.startsWith(" ") || text.startsWith(",") || text.startsWith(".") || text.startsWith("!")
-            ? ""
-            : " ";
         updated[updated.length - 1] = {
           ...lastMsg,
-          text: `${lastMsg.text}${separator}${text.trim()}`,
+          text: appendChunkToMessage(lastMsg.text, text),
           isInterim: !isFinished,
         };
         if (isFinished) {
@@ -176,7 +200,6 @@ export function useLiveSession() {
       if (!isFinished) {
         activeAiMessageIdRef.current = newId;
       }
-      // Since AI is speaking, customer's turn is done
       activeCustomerMessageIdRef.current = null;
 
       return [
@@ -344,6 +367,7 @@ export function useLiveSession() {
 
         // 6. Setup is complete and session instance is returned
         sessionRef.current = session;
+        setStartedAt(new Date().toISOString());
         setStatus("active");
         setStatusDetail("Live with Prospect");
 
@@ -419,12 +443,16 @@ export function useLiveSession() {
    * End an active call cleanly and finalize recording
    */
   const endCall = useCallback(async () => {
+    if (statusRef.current !== "active" && statusRef.current !== "connecting") {
+      return null;
+    }
     setStatus("ended");
     setStatusDetail("Call Ended");
     const rec = await cleanupResources();
     if (rec) {
       setRecording(rec);
     }
+    return rec;
   }, [cleanupResources]);
 
   /**
@@ -452,6 +480,7 @@ export function useLiveSession() {
     setElapsedSeconds(0);
     setIsMuted(false);
     setRecording(null);
+    setStartedAt(null);
   }, [cleanupResources]);
 
   return {
@@ -462,6 +491,7 @@ export function useLiveSession() {
     elapsedSeconds,
     isMuted,
     recording,
+    startedAt,
     startCall,
     endCall,
     toggleMute,
@@ -469,3 +499,4 @@ export function useLiveSession() {
     clearError: () => setError(null),
   };
 }
+

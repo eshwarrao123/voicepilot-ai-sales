@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, startTransition } from "react";
+import { useState, useEffect, useRef, startTransition } from "react";
 import Link from "next/link";
 import {
   Phone,
@@ -18,11 +18,15 @@ import {
   FileAudio,
   Sparkles,
   XCircle,
+  Loader2,
+  RefreshCw,
+  ArrowRight,
 } from "lucide-react";
-import type { CustomerInfo, ProductConfig, CallStatus } from "@/types";
-import { DEFAULT_PRODUCT_CONFIG } from "@/types";
+import type { CustomerInfo, ProductConfig, CallStatus, CallRecord, SalesOutcome } from "@/types";
+import { DEFAULT_PRODUCT_CONFIG, SALES_OUTCOME_LABELS } from "@/types";
 import { PRODUCT_CONFIG_STORAGE_KEY } from "@/lib/constants";
 import { useLiveSession } from "@/hooks/useLiveSession";
+import { saveCompletedCall, retryCallAnalysis } from "@/lib/calls/persistence";
 
 // ─── Call status config ────────────────────────────────────────────────────
 
@@ -62,6 +66,18 @@ const STATUS_CONFIG: Record<
   },
 };
 
+const OUTCOME_STYLES: Record<
+  SalesOutcome,
+  { bg: string; color: string; border: string }
+> = {
+  converted: { bg: "#ecfdf5", color: "#065f46", border: "#a7f3d0" },
+  interested: { bg: "#eff6ff", color: "#1e40af", border: "#bfdbfe" },
+  demo_requested: { bg: "#f5f3ff", color: "#5b21b6", border: "#ddd6fe" },
+  follow_up_required: { bg: "#fffbeb", color: "#92400e", border: "#fde68a" },
+  not_interested: { bg: "#fef2f2", color: "#991b1b", border: "#fecaca" },
+  no_response: { bg: "#f3f4f6", color: "#374151", border: "#e5e7eb" },
+};
+
 // ─── Default customer ──────────────────────────────────────────────────────
 
 const DEFAULT_CUSTOMER: CustomerInfo = {
@@ -76,6 +92,15 @@ export default function LiveCallPage() {
   const [customer, setCustomer] = useState<CustomerInfo>(DEFAULT_CUSTOMER);
   const [productConfig, setProductConfig] = useState<ProductConfig>(DEFAULT_PRODUCT_CONFIG);
   const [recordingConsent, setRecordingConsent] = useState(false);
+
+  // Persistence lifecycle states
+  const [saveStatus, setSaveStatus] = useState<
+    "idle" | "saving" | "saved" | "partial_failure" | "error" | "unconfigured"
+  >("idle");
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+  const [savedRecord, setSavedRecord] = useState<CallRecord | null>(null);
+  const [isRetryingAnalysis, setIsRetryingAnalysis] = useState(false);
+  const saveTriggeredRef = useRef<boolean>(false);
 
   // Load configured product from localStorage (setup page persistence)
   useEffect(() => {
@@ -101,6 +126,7 @@ export default function LiveCallPage() {
     elapsedSeconds,
     isMuted,
     recording,
+    startedAt,
     startCall,
     endCall,
     toggleMute,
@@ -114,6 +140,81 @@ export default function LiveCallPage() {
   const isEnded = status === "ended";
   const statusConfig = STATUS_CONFIG[status];
 
+  // Auto-save completed call to Supabase Storage and PostgreSQL
+  useEffect(() => {
+    if (status !== "ended" || saveTriggeredRef.current) {
+      return;
+    }
+
+    saveTriggeredRef.current = true;
+    const callId = crypto.randomUUID();
+
+    const persistCall = async () => {
+      // Allow recorder blob a brief moment to settle if needed
+      await new Promise((resolve) => setTimeout(resolve, 250));
+
+      setSaveStatus("saving");
+      setSaveNotice(null);
+
+      const recBlob = recording?.blob || null;
+
+      const res = await saveCompletedCall({
+        callId,
+        customer,
+        product: productConfig,
+        consent: recordingConsent,
+        startedAt: startedAt || new Date(Date.now() - elapsedSeconds * 1000).toISOString(),
+        endedAt: new Date().toISOString(),
+        durationSeconds: elapsedSeconds,
+        transcript,
+        recordingBlob: recBlob,
+      });
+
+      if (res.success) {
+        setSavedRecord(res.record);
+        if (res.notice) {
+          setSaveStatus("partial_failure");
+          setSaveNotice(res.notice);
+        } else {
+          setSaveStatus("saved");
+        }
+      } else {
+        if (res.unconfigured) {
+          setSaveStatus("unconfigured");
+          setSaveNotice(res.error);
+        } else {
+          setSaveStatus("error");
+          setSaveNotice(res.error);
+        }
+      }
+    };
+
+    void persistCall();
+  }, [
+    status,
+    recording,
+    customer,
+    productConfig,
+    recordingConsent,
+    startedAt,
+    elapsedSeconds,
+    transcript,
+  ]);
+
+  async function handleRetryAnalysis() {
+    if (!savedRecord) return;
+    setIsRetryingAnalysis(true);
+    const res = await retryCallAnalysis(savedRecord, productConfig);
+    setIsRetryingAnalysis(false);
+    if (res.success && res.record) {
+      setSavedRecord(res.record);
+      setSaveStatus("saved");
+      setSaveNotice(null);
+    } else {
+      setSaveNotice(res.error || "Retry analysis failed.");
+    }
+  }
+
   function formatElapsed(secs: number): string {
     const m = Math.floor(secs / 60);
     const s = secs % 60;
@@ -121,12 +222,25 @@ export default function LiveCallPage() {
   }
 
   function handleStart() {
+    saveTriggeredRef.current = false;
+    setSaveStatus("idle");
+    setSaveNotice(null);
+    setSavedRecord(null);
     void startCall({
       customer,
       product: productConfig,
       consent: recordingConsent,
     });
   }
+
+  function handleReset() {
+    saveTriggeredRef.current = false;
+    setSaveStatus("idle");
+    setSaveNotice(null);
+    setSavedRecord(null);
+    resetCall();
+  }
+
 
   return (
     <div className="page-container">
@@ -394,7 +508,7 @@ export default function LiveCallPage() {
                 <button
                   id="new-call-btn"
                   className="btn btn-secondary"
-                  onClick={resetCall}
+                  onClick={handleReset}
                   aria-label="Start another call"
                   style={{ flex: 1 }}
                 >
@@ -402,7 +516,243 @@ export default function LiveCallPage() {
                 </button>
               )}
             </div>
+
+            {/* Persistence & Save State Indicators */}
+            {isEnded && (
+              <div style={{ marginTop: "1rem" }}>
+                {saveStatus === "saving" && (
+                  <div
+                    role="status"
+                    style={{
+                      padding: "0.75rem 0.875rem",
+                      background: "var(--accent-50)",
+                      border: "1px solid var(--accent-200)",
+                      borderRadius: "var(--radius-md)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.625rem",
+                    }}
+                  >
+                    <Loader2 size={15} className="spin" style={{ color: "var(--accent-600)", flexShrink: 0 }} />
+                    <span style={{ fontSize: "var(--font-size-xs)", color: "var(--ink-secondary)", fontWeight: 500 }}>
+                      Persisting conversation, uploading audio &amp; generating AI sales intelligence…
+                    </span>
+                  </div>
+                )}
+
+                {saveStatus === "saved" && (
+                  <div
+                    style={{
+                      padding: "0.75rem 0.875rem",
+                      background: "#ecfdf5",
+                      border: "1px solid #a7f3d0",
+                      borderRadius: "var(--radius-md)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "0.5rem",
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <CheckCircle2 size={15} style={{ color: "#059669", flexShrink: 0 }} />
+                      <span style={{ fontSize: "var(--font-size-xs)", fontWeight: 600, color: "#065f46" }}>
+                        Saved to Supabase database &amp; private storage
+                      </span>
+                    </div>
+                    <Link
+                      href="/history"
+                      style={{
+                        fontSize: "var(--font-size-xs)",
+                        color: "var(--accent-600)",
+                        fontWeight: 600,
+                        textDecoration: "none",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.25rem",
+                      }}
+                    >
+                      History <ArrowRight size={11} />
+                    </Link>
+                  </div>
+                )}
+
+                {saveStatus === "partial_failure" && (
+                  <div
+                    style={{
+                      padding: "0.75rem 0.875rem",
+                      background: "#fffbeb",
+                      border: "1px solid #fde68a",
+                      borderRadius: "var(--radius-md)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <AlertCircle size={15} style={{ color: "#d97706", flexShrink: 0 }} />
+                        <span style={{ fontSize: "var(--font-size-xs)", color: "#92400e", fontWeight: 600 }}>
+                          Partially Saved
+                        </span>
+                      </div>
+                      {savedRecord?.analysisStatus === "failed" && (
+                        <button
+                          onClick={handleRetryAnalysis}
+                          disabled={isRetryingAnalysis}
+                          className="btn btn-secondary btn-sm"
+                          style={{ fontSize: "11px", height: "26px", padding: "0 0.5rem" }}
+                        >
+                          <RefreshCw size={11} className={isRetryingAnalysis ? "spin" : ""} />
+                          {isRetryingAnalysis ? "Retrying…" : "Retry AI Analysis"}
+                        </button>
+                      )}
+                    </div>
+                    {saveNotice && (
+                      <p style={{ fontSize: "11px", color: "#92400e", margin: "0.375rem 0 0 0", lineHeight: 1.4 }}>
+                        {saveNotice}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {saveStatus === "unconfigured" && (
+                  <div
+                    style={{
+                      padding: "0.75rem 0.875rem",
+                      background: "var(--surface-base)",
+                      border: "1px solid var(--border-subtle)",
+                      borderRadius: "var(--radius-md)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
+                      <AlertCircle size={14} style={{ color: "var(--ink-tertiary)", flexShrink: 0 }} />
+                      <span style={{ fontSize: "var(--font-size-xs)", fontWeight: 600, color: "var(--ink-secondary)" }}>
+                        Local Browser Session Only
+                      </span>
+                    </div>
+                    <p style={{ fontSize: "11px", color: "var(--ink-tertiary)", margin: 0, lineHeight: 1.4 }}>
+                      Supabase credentials are not configured. The recording and transcript are available in this local session, but will not persist to the database. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to enable cloud persistence.
+                    </p>
+                  </div>
+                )}
+
+                {saveStatus === "error" && (
+                  <div
+                    style={{
+                      padding: "0.75rem 0.875rem",
+                      background: "var(--status-error-bg)",
+                      border: "1px solid var(--status-error-border)",
+                      borderRadius: "var(--radius-md)",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                      <AlertCircle size={14} style={{ color: "var(--status-error-ink)", flexShrink: 0 }} />
+                      <span style={{ fontSize: "var(--font-size-xs)", fontWeight: 600, color: "var(--status-error-ink)" }}>
+                        Failed to persist to Supabase
+                      </span>
+                    </div>
+                    <p style={{ fontSize: "11px", color: "var(--status-error-ink)", margin: "0.25rem 0 0", lineHeight: 1.4 }}>
+                      {saveNotice}
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
+
+          {/* AI Post-Call Intelligence Card */}
+          {isEnded && savedRecord && savedRecord.analysisStatus === "complete" && (
+            <div className="card" style={{ padding: "1.25rem" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: "0.875rem",
+                  gap: "0.5rem",
+                  flexWrap: "wrap",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <Sparkles size={16} style={{ color: "var(--accent-600)" }} />
+                  <h2 className="section-title">Sales Intelligence</h2>
+                </div>
+                {savedRecord.outcome && (
+                  <span
+                    style={{
+                      padding: "0.25rem 0.625rem",
+                      borderRadius: "9999px",
+                      fontSize: "var(--font-size-xs)",
+                      fontWeight: 600,
+                      background: OUTCOME_STYLES[savedRecord.outcome]?.bg || "var(--surface-base)",
+                      color: OUTCOME_STYLES[savedRecord.outcome]?.color || "var(--ink-secondary)",
+                      border: `1px solid ${OUTCOME_STYLES[savedRecord.outcome]?.border || "var(--border-subtle)"}`,
+                    }}
+                  >
+                    {SALES_OUTCOME_LABELS[savedRecord.outcome]}
+                  </span>
+                )}
+              </div>
+
+              {savedRecord.summary && (
+                <div style={{ marginBottom: "0.875rem" }}>
+                  <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--ink-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 0.25rem 0" }}>
+                    Summary
+                  </p>
+                  <p style={{ fontSize: "var(--font-size-xs)", color: "var(--ink-primary)", lineHeight: 1.5, margin: 0 }}>
+                    {savedRecord.summary}
+                  </p>
+                </div>
+              )}
+
+              {savedRecord.outcomeReason && (
+                <div style={{ marginBottom: "0.875rem", padding: "0.5rem 0.75rem", background: "var(--surface-base)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-subtle)" }}>
+                  <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--ink-secondary)", margin: "0 0 0.2rem 0" }}>
+                    Classification Rationale
+                  </p>
+                  <p style={{ fontSize: "var(--font-size-xs)", color: "var(--ink-tertiary)", margin: 0, lineHeight: 1.4 }}>
+                    {savedRecord.outcomeReason}
+                  </p>
+                </div>
+              )}
+
+              {savedRecord.customerNeeds && savedRecord.customerNeeds.length > 0 && (
+                <div style={{ marginBottom: "0.75rem" }}>
+                  <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--ink-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 0.35rem 0" }}>
+                    Identified Needs
+                  </p>
+                  <div style={{ display: "flex", gap: "0.375rem", flexWrap: "wrap" }}>
+                    {savedRecord.customerNeeds.map((need, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          fontSize: "11px",
+                          padding: "0.2rem 0.5rem",
+                          borderRadius: "4px",
+                          background: "var(--surface-base)",
+                          border: "1px solid var(--border-subtle)",
+                          color: "var(--ink-secondary)",
+                        }}
+                      >
+                        {need}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {savedRecord.nextStepsList && savedRecord.nextStepsList.length > 0 && (
+                <div>
+                  <p style={{ fontSize: "11px", fontWeight: 600, color: "var(--ink-tertiary)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 0.25rem 0" }}>
+                    Recommended Next Steps
+                  </p>
+                  <ul style={{ margin: 0, paddingLeft: "1.25rem", fontSize: "var(--font-size-xs)", color: "var(--ink-secondary)", lineHeight: 1.5 }}>
+                    {savedRecord.nextStepsList.map((step, idx) => (
+                      <li key={idx}>{step}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Recording Consent Card */}
           <div className="card" style={{ padding: "1.25rem" }}>
@@ -562,8 +912,13 @@ export default function LiveCallPage() {
                       lineHeight: 1.4,
                     }}
                   >
-                    * Note: Recording is preserved in your current local browser session for Phase 2.
-                    Cloud persistence to Supabase Storage will be activated in Phase 3.
+                    {savedRecord?.recordingPath
+                      ? `* Preserved to private Supabase Storage at: ${savedRecord.recordingPath}`
+                      : saveStatus === "saving"
+                      ? "* Uploading audio recording to private Supabase Storage…"
+                      : saveStatus === "unconfigured"
+                      ? "* Note: Stored in browser memory. Configure Supabase credentials to enable cloud persistence."
+                      : "* Audio recording captured dual tracks (customer + AI)."}
                   </p>
                 </div>
               ) : (
@@ -814,7 +1169,13 @@ export default function LiveCallPage() {
               <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
                 <CheckCircle2 size={13} style={{ color: "var(--status-success-ink)" }} />
                 <span style={{ fontSize: "var(--font-size-xs)", color: "var(--ink-secondary)" }}>
-                  Call completed and recorded.
+                  {saveStatus === "saved"
+                    ? "Call persisted to Supabase."
+                    : saveStatus === "saving"
+                    ? "Persisting to database…"
+                    : saveStatus === "unconfigured"
+                    ? "Call completed (local session only)."
+                    : "Call completed."}
                 </span>
               </div>
               <Link

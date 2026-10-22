@@ -86,9 +86,21 @@ export interface CustomerInfo {
 // ─── Call Record ─────────────────────────────────────────────────────────────
 
 export type CallStatus = 'idle' | 'connecting' | 'active' | 'ended' | 'error';
+export type AnalysisStatus = 'pending' | 'complete' | 'failed';
+
+export interface PostCallAnalysis {
+  summary: string;
+  customerNeeds: string[];
+  objections: string[];
+  nextSteps: string[];
+  outcome: SalesOutcome;
+  outcomeReason: string;
+}
 
 export interface CallRecord {
   id: string;
+  ownerId?: string;
+  createdAt?: string;
   /** ISO 8601 */
   startedAt: string;
   /** ISO 8601, undefined if call is still active */
@@ -96,18 +108,61 @@ export interface CallRecord {
   /** Duration in seconds */
   durationSeconds: number;
   customer: CustomerInfo;
+  productName?: string;
+  productContext?: ProductConfig;
   transcript: TranscriptMessage[];
-  /** Path / URL to the audio recording — available after Phase 2 */
+  /** Signed URL or local preview URL for playback */
   recordingUrl?: string;
-  /** AI-generated summary — available after Phase 3 */
+  /** Private Supabase Storage object path */
+  recordingPath?: string;
+  recordingSizeBytes?: number;
+  recordingMimeType?: string;
+  /** AI-generated summary */
   summary?: string;
-  /** Extracted customer needs — available after Phase 3 */
-  needs?: string;
-  /** Extracted objections — available after Phase 3 */
-  objections?: string;
-  /** Recommended follow-up — available after Phase 3 */
-  nextSteps?: string;
+  /** Extracted customer needs */
+  customerNeeds?: string[];
+  /** Extracted objections */
+  objectionsList?: string[];
+  /** Recommended next steps */
+  nextStepsList?: string[];
+  /** Sales outcome classification */
   outcome?: SalesOutcome;
+  /** Rationale for outcome grounded in transcript */
+  outcomeReason?: string;
+  /** Analysis lifecycle status */
+  analysisStatus?: AnalysisStatus;
+  analysisError?: string;
   /** Whether the customer consented to recording */
   recordingConsent: boolean;
 }
+
+/** Raw database record shape matching call_records table in Supabase */
+export interface DbCallRecord {
+  id: string;
+  owner_id: string;
+  created_at: string;
+  started_at: string;
+  ended_at: string | null;
+  duration_seconds: number;
+  customer_name: string;
+  customer_company: string | null;
+  customer_email: string | null;
+  customer_phone: string | null;
+  customer_notes: string | null;
+  product_name: string;
+  product_context: ProductConfig;
+  recording_consent: boolean;
+  transcript: TranscriptMessage[];
+  recording_path: string | null;
+  recording_mime_type: string | null;
+  recording_size_bytes: number | null;
+  summary: string | null;
+  customer_needs: string[] | null;
+  objections: string[] | null;
+  next_steps: string[] | null;
+  outcome: SalesOutcome | null;
+  outcome_reason: string | null;
+  analysis_status: AnalysisStatus;
+  analysis_error: string | null;
+}
+
