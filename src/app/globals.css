@@ -1,0 +1,552 @@
+@import "tailwindcss";
+
+/* ─── Design Tokens ─────────────────────────────────────────────────────── */
+:root {
+  /* Surface */
+  --surface-base: #f9f9f8;
+  --surface-raised: #ffffff;
+  --surface-overlay: #ffffff;
+
+  /* Border */
+  --border-subtle: #e5e5e3;
+  --border-default: #d4d4d0;
+  --border-strong: #a3a39e;
+
+  /* Ink */
+  --ink-primary: #111110;
+  --ink-secondary: #52524e;
+  --ink-tertiary: #8f8f8a;
+  --ink-disabled: #c0c0bb;
+
+  /* Accent — restrained slate-blue */
+  --accent-600: #2563eb;
+  --accent-700: #1d4ed8;
+  --accent-50: #eff6ff;
+  --accent-100: #dbeafe;
+  --accent-200: #bfdbfe;
+
+  /* Status */
+  --status-success-bg: #f0fdf4;
+  --status-success-ink: #166534;
+  --status-success-border: #bbf7d0;
+  --status-warning-bg: #fffbeb;
+  --status-warning-ink: #92400e;
+  --status-warning-border: #fde68a;
+  --status-error-bg: #fef2f2;
+  --status-error-ink: #991b1b;
+  --status-error-border: #fecaca;
+
+  /* Active call indicator */
+  --call-live: #16a34a;
+  --call-live-bg: #f0fdf4;
+
+  /* Typography scale */
+  --font-size-xs: 0.6875rem;   /* 11px */
+  --font-size-sm: 0.8125rem;   /* 13px */
+  --font-size-base: 0.9375rem; /* 15px */
+  --font-size-lg: 1.0625rem;   /* 17px */
+  --font-size-xl: 1.1875rem;   /* 19px */
+  --font-size-2xl: 1.375rem;   /* 22px */
+  --font-size-3xl: 1.75rem;    /* 28px */
+
+  /* Spacing */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --space-12: 3rem;
+  --space-16: 4rem;
+
+  /* Radius */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+
+  /* Shadow */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 2px 8px 0 rgb(0 0 0 / 0.08), 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --shadow-lg: 0 4px 16px 0 rgb(0 0 0 / 0.1), 0 2px 4px 0 rgb(0 0 0 / 0.06);
+}
+
+/* ─── Tailwind Theme Extension ──────────────────────────────────────────── */
+@theme inline {
+  --color-background: var(--surface-base);
+  --color-foreground: var(--ink-primary);
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-mono-default);
+}
+
+/* ─── Reset & Base ───────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  background-color: var(--surface-base);
+  color: var(--ink-primary);
+  font-family: var(--font-sans, system-ui, sans-serif);
+  font-size: var(--font-size-base);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Focus Styles ───────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--accent-600);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ─── Typography ─────────────────────────────────────────────────────────── */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.3;
+  color: var(--ink-primary);
+}
+
+h1 { font-size: var(--font-size-3xl); }
+h2 { font-size: var(--font-size-2xl); }
+h3 { font-size: var(--font-size-xl); }
+
+p {
+  color: var(--ink-secondary);
+  line-height: 1.65;
+}
+
+/* ─── Shared Component Styles ────────────────────────────────────────────── */
+
+/* Card / surface */
+.card {
+  background: var(--surface-raised);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Label */
+.label {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-tertiary);
+}
+
+/* Input base */
+.input {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background: var(--surface-raised);
+  color: var(--ink-primary);
+  font-size: var(--font-size-sm);
+  line-height: 1.5;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent-600);
+  box-shadow: 0 0 0 3px var(--accent-100);
+}
+
+.input::placeholder {
+  color: var(--ink-disabled);
+}
+
+.input:disabled {
+  background: var(--surface-base);
+  color: var(--ink-tertiary);
+  cursor: not-allowed;
+}
+
+/* Textarea variant */
+textarea.input {
+  resize: vertical;
+  min-height: 6rem;
+}
+
+/* Button variants */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background-color 0.12s ease, color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: var(--accent-600);
+  color: #fff;
+  border-color: var(--accent-700);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--accent-700);
+}
+
+.btn-primary:active:not(:disabled) {
+  background-color: var(--accent-700);
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.15);
+}
+
+.btn-secondary {
+  background-color: var(--surface-raised);
+  color: var(--ink-primary);
+  border-color: var(--border-default);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: var(--surface-base);
+  border-color: var(--border-strong);
+}
+
+.btn-danger {
+  background-color: var(--status-error-bg);
+  color: var(--status-error-ink);
+  border-color: #fca5a5;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: #fee2e2;
+  border-color: #f87171;
+}
+
+.btn-success {
+  background-color: var(--status-success-bg);
+  color: var(--status-success-ink);
+  border-color: var(--status-success-border);
+}
+
+.btn-success:hover:not(:disabled) {
+  background-color: #dcfce7;
+}
+
+.btn-lg {
+  padding: 0.625rem 1.25rem;
+  font-size: var(--font-size-base);
+  border-radius: var(--radius-lg);
+}
+
+.btn-sm {
+  padding: 0.25rem 0.625rem;
+  font-size: var(--font-size-xs);
+  border-radius: var(--radius-sm);
+}
+
+/* Badge */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.2rem 0.5rem;
+  border-radius: 9999px;
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  border: 1px solid transparent;
+}
+
+/* Live pulse dot */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.live-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: var(--call-live);
+  animation: pulse-dot 1.5s ease-in-out infinite;
+}
+
+/* ─── Sidebar nav ─────────────────────────────────────────────────────────── */
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md);
+  color: var(--ink-secondary);
+  font-size: var(--font-size-sm);
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.1s ease, color 0.1s ease;
+}
+
+.nav-link:hover {
+  background-color: var(--surface-base);
+  color: var(--ink-primary);
+}
+
+.nav-link.active {
+  background-color: var(--accent-50);
+  color: var(--accent-600);
+}
+
+.nav-link.active svg {
+  color: var(--accent-600);
+}
+
+/* ─── Empty state ─────────────────────────────────────────────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
+}
+
+.empty-state-icon {
+  width: 40px;
+  height: 40px;
+  color: var(--ink-disabled);
+}
+
+/* Quick-link card hover */
+.quick-link {
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.quick-link:hover {
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-default);
+}
+
+/* ─── Page header ─────────────────────────────────────────────────────────── */
+.page-header {
+  border-bottom: 1px solid var(--border-subtle);
+  padding-bottom: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.page-title {
+  font-size: var(--font-size-2xl);
+  font-weight: 700;
+  color: var(--ink-primary);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.page-description {
+  margin-top: 0.25rem;
+  font-size: var(--font-size-sm);
+  color: var(--ink-tertiary);
+  line-height: 1.5;
+}
+
+/* ─── Section header ─────────────────────────────────────────────────────── */
+.section-title {
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--ink-primary);
+  letter-spacing: -0.005em;
+}
+
+/* ─── Stat card ──────────────────────────────────────────────────────────── */
+.stat-value {
+  font-size: var(--font-size-3xl);
+  font-weight: 700;
+  color: var(--ink-primary);
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: var(--ink-tertiary);
+  margin-top: 0.25rem;
+}
+
+/* ─── Transcript message ──────────────────────────────────────────────────── */
+.transcript-message {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-width: 80%;
+}
+
+.transcript-message.ai {
+  align-self: flex-start;
+}
+
+.transcript-message.customer {
+  align-self: flex-end;
+}
+
+.transcript-bubble {
+  padding: 0.625rem 0.875rem;
+  border-radius: var(--radius-lg);
+  font-size: var(--font-size-sm);
+  line-height: 1.55;
+}
+
+.transcript-message.ai .transcript-bubble {
+  background-color: var(--surface-base);
+  border: 1px solid var(--border-subtle);
+  color: var(--ink-primary);
+  border-bottom-left-radius: var(--radius-sm);
+}
+
+.transcript-message.customer .transcript-bubble {
+  background-color: var(--accent-600);
+  color: #fff;
+  border-bottom-right-radius: var(--radius-sm);
+}
+
+.transcript-meta {
+  font-size: var(--font-size-xs);
+  color: var(--ink-tertiary);
+}
+
+.transcript-message.customer .transcript-meta {
+  text-align: right;
+}
+
+/* ─── Form field group ───────────────────────────────────────────────────── */
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.field-label {
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--ink-secondary);
+  letter-spacing: 0.01em;
+}
+
+.field-hint {
+  font-size: var(--font-size-xs);
+  color: var(--ink-tertiary);
+}
+
+/* ─── Utility ────────────────────────────────────────────────────────────── */
+.divider {
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 1.5rem 0;
+}
+
+.text-muted {
+  color: var(--ink-tertiary);
+  font-size: var(--font-size-sm);
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+.scrollable {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-default) transparent;
+}
+
+.scrollable::-webkit-scrollbar {
+  width: 5px;
+}
+
+.scrollable::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollable::-webkit-scrollbar-thumb {
+  background-color: var(--border-default);
+  border-radius: 999px;
+}
+
+/* ─── Reduced motion ─────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+
+  .live-dot {
+    animation: none;
+  }
+}
+
+/* ─── Responsive layout helpers ──────────────────────────────────────────── */
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+.sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  background: var(--surface-raised);
+  border-right: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.main-content {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+.page-container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem;
+}
+
+/* Mobile: collapse sidebar to top nav */
+@media (max-width: 768px) {
+  .app-shell {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    height: auto;
+    position: static;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .page-container {
+    padding: 1.25rem 1rem;
+  }
+}
