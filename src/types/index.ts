@@ -34,6 +34,8 @@ export interface TranscriptMessage {
   text: string;
   /** ISO 8601 timestamp */
   timestamp: string;
+  /** Whether this is an interim transcription chunk currently streaming */
+  isInterim?: boolean;
 }
 
 // ─── Product Configuration ───────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, startTransition } from "react";
 import Link from "next/link";
 import {
   Phone,
@@ -10,18 +10,24 @@ import {
   Clock,
   User,
   Building2,
-  MessageSquare,
+  Mail,
   AlertCircle,
-  CheckCircle,
+  CheckCircle2,
+  Download,
+  Volume2,
+  FileAudio,
+  Sparkles,
+  XCircle,
 } from "lucide-react";
-import type { CustomerInfo, TranscriptMessage } from "@/types";
+import type { CustomerInfo, ProductConfig, CallStatus } from "@/types";
+import { DEFAULT_PRODUCT_CONFIG } from "@/types";
+import { PRODUCT_CONFIG_STORAGE_KEY } from "@/lib/constants";
+import { useLiveSession } from "@/hooks/useLiveSession";
 
-// ─── Call status display ───────────────────────────────────────────────────
-
-type LocalCallStatus = "idle" | "starting" | "active" | "ended";
+// ─── Call status config ────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<
-  LocalCallStatus,
+  CallStatus,
   { label: string; color: string; bg: string; border: string }
 > = {
   idle: {
@@ -30,14 +36,14 @@ const STATUS_CONFIG: Record<
     bg: "var(--surface-base)",
     border: "var(--border-subtle)",
   },
-  starting: {
+  connecting: {
     label: "Connecting…",
     color: "var(--status-warning-ink)",
     bg: "var(--status-warning-bg)",
     border: "var(--status-warning-border)",
   },
   active: {
-    label: "Live",
+    label: "Live with Prospect",
     color: "var(--call-live)",
     bg: "var(--call-live-bg)",
     border: "var(--status-success-border)",
@@ -48,68 +54,65 @@ const STATUS_CONFIG: Record<
     bg: "var(--surface-base)",
     border: "var(--border-subtle)",
   },
+  error: {
+    label: "Call Failed",
+    color: "var(--status-error-ink)",
+    bg: "var(--status-error-bg)",
+    border: "var(--status-error-border)",
+  },
 };
 
 // ─── Default customer ──────────────────────────────────────────────────────
 
 const DEFAULT_CUSTOMER: CustomerInfo = {
-  name: "",
-  company: "",
-  email: "",
-  phone: "",
-  notes: "",
+  name: "Sarah Chen",
+  company: "Apex Technologies",
+  email: "sarah.chen@apextech.io",
+  phone: "+1 (555) 382-9102",
+  notes: "Evaluating project management platforms to consolidate Jira and Slack tasks.",
 };
 
-// ─── Main component ────────────────────────────────────────────────────────
-
 export default function LiveCallPage() {
-  const [status, setStatus] = useState<LocalCallStatus>("idle");
   const [customer, setCustomer] = useState<CustomerInfo>(DEFAULT_CUSTOMER);
+  const [productConfig, setProductConfig] = useState<ProductConfig>(DEFAULT_PRODUCT_CONFIG);
   const [recordingConsent, setRecordingConsent] = useState(false);
-  const [transcript, setTranscript] = useState<TranscriptMessage[]>([]);
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  const [isMuted, setIsMuted] = useState(false);
 
-  // Elapsed timer — runs only when call is active.
-  // Reset happens in handleStartCall / handleReset, not inside the effect,
-  // to avoid the react-hooks/set-state-in-effect lint rule.
+  // Load configured product from localStorage (setup page persistence)
   useEffect(() => {
-    if (status !== "active") return;
-    const interval = setInterval(() => {
-      setElapsedSeconds((s) => s + 1);
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [status]);
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(PRODUCT_CONFIG_STORAGE_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        startTransition(() => {
+          setProductConfig({ ...DEFAULT_PRODUCT_CONFIG, ...parsed });
+        });
+      }
+    } catch {
+      // Use defaults
+    }
+  }, []);
+
+  const {
+    status,
+    statusDetail,
+    error,
+    transcript,
+    elapsedSeconds,
+    isMuted,
+    recording,
+    startCall,
+    endCall,
+    toggleMute,
+    resetCall,
+    clearError,
+  } = useLiveSession();
 
   const isActive = status === "active";
-  const isIdle = status === "idle" || status === "ended";
+  const isConnecting = status === "connecting";
+  const isIdle = status === "idle";
+  const isEnded = status === "ended";
   const statusConfig = STATUS_CONFIG[status];
-
-  function handleStartCall() {
-    if (!customer.name.trim()) {
-      alert("Please enter a customer name before starting the call.");
-      return;
-    }
-    setStatus("starting");
-    setTranscript([]);
-    setElapsedSeconds(0);
-    // Phase 2: replace this stub with real Gemini Live session init.
-    // For now we just stay in "starting" state to show the UI truthfully.
-    // DO NOT auto-transition to "active" — the real voice pipeline must do that.
-  }
-
-  function handleEndCall() {
-    setStatus("ended");
-    setIsMuted(false);
-  }
-
-  function handleReset() {
-    setStatus("idle");
-    setTranscript([]);
-    setElapsedSeconds(0);
-    setCustomer(DEFAULT_CUSTOMER);
-    setRecordingConsent(false);
-  }
 
   function formatElapsed(secs: number): string {
     const m = Math.floor(secs / 60);
@@ -117,62 +120,127 @@ export default function LiveCallPage() {
     return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
   }
 
+  function handleStart() {
+    void startCall({
+      customer,
+      product: productConfig,
+      consent: recordingConsent,
+    });
+  }
+
   return (
     <div className="page-container">
       {/* Page header */}
       <header className="page-header">
-        <h1 className="page-title">Live Call</h1>
-        <p className="page-description">
-          AI voice sales assistant workspace — FlowDesk campaign.
-        </p>
-      </header>
-
-      {/* Phase notice */}
-      <div
-        role="status"
-        aria-live="polite"
-        style={{
-          marginBottom: "1.5rem",
-          padding: "0.75rem 1rem",
-          background: "var(--status-warning-bg)",
-          border: "1px solid var(--status-warning-border)",
-          borderRadius: "var(--radius-md)",
-          display: "flex",
-          gap: "0.625rem",
-          alignItems: "flex-start",
-        }}
-      >
-        <AlertCircle
-          size={15}
-          style={{ color: "var(--status-warning-ink)", flexShrink: 0, marginTop: "1px" }}
-          aria-hidden="true"
-        />
-        <p
+        <div
           style={{
-            fontSize: "var(--font-size-xs)",
-            color: "var(--status-warning-ink)",
-            margin: 0,
-            lineHeight: 1.5,
+            display: "flex",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: "1rem",
+            flexWrap: "wrap",
           }}
         >
-          <strong>Phase 1 — Interface only.</strong> The voice engine, microphone session,
-          live transcription, and recording are not yet connected. These will be wired up
-          in Phase 2. Clicking &ldquo;Start Call&rdquo; will enter the connecting state but
-          no actual call will be placed.
-        </p>
-      </div>
+          <div>
+            <h1 className="page-title">Live Call Studio</h1>
+            <p className="page-description">
+              Real-time voice sales assistant — Active campaign:{" "}
+              <strong>{productConfig.name}</strong>
+            </p>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.5rem",
+              fontSize: "var(--font-size-xs)",
+              color: "var(--ink-secondary)",
+              background: "var(--surface-base)",
+              padding: "0.375rem 0.75rem",
+              borderRadius: "var(--radius-md)",
+              border: "1px solid var(--border-subtle)",
+            }}
+          >
+            <Sparkles size={13} style={{ color: "var(--accent-600)" }} />
+            <span>Gemini Live Voice Engine</span>
+          </div>
+        </div>
+      </header>
 
+      {/* Error alert banner */}
+      {error && (
+        <div
+          role="alert"
+          style={{
+            marginBottom: "1.25rem",
+            padding: "0.875rem 1rem",
+            background: "var(--status-error-bg)",
+            border: "1px solid var(--status-error-border)",
+            borderRadius: "var(--radius-md)",
+            display: "flex",
+            gap: "0.75rem",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+          }}
+        >
+          <div style={{ display: "flex", gap: "0.625rem", alignItems: "flex-start" }}>
+            <AlertCircle
+              size={16}
+              style={{ color: "var(--status-error-ink)", flexShrink: 0, marginTop: "2px" }}
+              aria-hidden="true"
+            />
+            <div>
+              <p
+                style={{
+                  fontSize: "var(--font-size-sm)",
+                  fontWeight: 600,
+                  color: "var(--status-error-ink)",
+                  margin: "0 0 0.125rem 0",
+                }}
+              >
+                Call Notice
+              </p>
+              <p
+                style={{
+                  fontSize: "var(--font-size-xs)",
+                  color: "var(--status-error-ink)",
+                  margin: 0,
+                  lineHeight: 1.4,
+                }}
+              >
+                {error}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={clearError}
+            aria-label="Dismiss alert"
+            style={{
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
+              color: "var(--status-error-ink)",
+              padding: 0,
+            }}
+          >
+            <XCircle size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Main Grid */}
       <div
+        className="live-call-grid"
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)",
-          gap: "1rem",
+          gridTemplateColumns: "minmax(0, 1.05fr) minmax(0, 1.2fr)",
+          gap: "1.25rem",
           alignItems: "start",
         }}
       >
-        {/* ─── Left column ─────────────────────────────────────────────── */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          {/* Call status card */}
+        {/* ─── Left Column: Controls & Context ─────────────────────────────── */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+          {/* Call Status & Controls Card */}
           <div className="card" style={{ padding: "1.25rem" }}>
             <div
               style={{
@@ -197,8 +265,18 @@ export default function LiveCallPage() {
                 role="status"
                 aria-label={`Call status: ${statusConfig.label}`}
               >
-                {isActive && (
-                  <span className="live-dot" aria-hidden="true" />
+                {isActive && <span className="live-dot" aria-hidden="true" />}
+                {isConnecting && (
+                  <span
+                    style={{
+                      width: "8px",
+                      height: "8px",
+                      borderRadius: "50%",
+                      background: "var(--status-warning-ink)",
+                      animation: "pulse-dot 1.5s ease-in-out infinite",
+                    }}
+                    aria-hidden="true"
+                  />
                 )}
                 <span
                   style={{
@@ -212,50 +290,71 @@ export default function LiveCallPage() {
               </div>
             </div>
 
-            {/* Duration */}
+            {/* Status detail & Duration */}
             <div
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: "0.5rem",
+                justifyContent: "space-between",
                 marginBottom: "1.25rem",
+                padding: "0.625rem 0.875rem",
+                background: "var(--surface-base)",
+                borderRadius: "var(--radius-md)",
+                border: "1px solid var(--border-subtle)",
               }}
             >
-              <Clock size={14} style={{ color: "var(--ink-tertiary)" }} aria-hidden="true" />
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <Clock
+                  size={14}
+                  style={{ color: "var(--ink-tertiary)" }}
+                  aria-hidden="true"
+                />
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono, monospace)",
+                    fontSize: "var(--font-size-xl)",
+                    fontWeight: 700,
+                    color: isActive ? "var(--ink-primary)" : "var(--ink-disabled)",
+                    letterSpacing: "-0.02em",
+                  }}
+                  aria-label={`Elapsed time: ${formatElapsed(elapsedSeconds)}`}
+                >
+                  {formatElapsed(elapsedSeconds)}
+                </span>
+              </div>
               <span
                 style={{
-                  fontFamily: "var(--font-mono, monospace)",
-                  fontSize: "var(--font-size-2xl)",
-                  fontWeight: 700,
-                  color: isActive ? "var(--ink-primary)" : "var(--ink-disabled)",
-                  letterSpacing: "-0.02em",
+                  fontSize: "var(--font-size-xs)",
+                  color: "var(--ink-secondary)",
+                  fontWeight: 500,
                 }}
-                aria-label={`Elapsed time: ${formatElapsed(elapsedSeconds)}`}
               >
-                {formatElapsed(elapsedSeconds)}
+                {statusDetail}
               </span>
             </div>
 
-            {/* Call controls */}
+            {/* Call action buttons */}
             <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-              {isIdle && (
+              {(isIdle || status === "error") && (
                 <button
                   id="start-call-btn"
                   className="btn btn-primary"
-                  onClick={handleStartCall}
-                  aria-label="Start call"
+                  onClick={handleStart}
+                  aria-label="Start voice call"
+                  style={{ flex: 1 }}
                 >
                   <Phone size={14} strokeWidth={2} />
                   Start Call
                 </button>
               )}
 
-              {status === "starting" && (
+              {isConnecting && (
                 <button
                   id="cancel-call-btn"
                   className="btn btn-secondary"
-                  onClick={handleEndCall}
+                  onClick={endCall}
                   aria-label="Cancel connecting"
+                  style={{ flex: 1 }}
                 >
                   <PhoneOff size={14} strokeWidth={2} />
                   Cancel
@@ -267,7 +366,7 @@ export default function LiveCallPage() {
                   <button
                     id="mute-btn"
                     className="btn btn-secondary"
-                    onClick={() => setIsMuted((m) => !m)}
+                    onClick={toggleMute}
                     aria-pressed={isMuted}
                     aria-label={isMuted ? "Unmute microphone" : "Mute microphone"}
                   >
@@ -281,8 +380,9 @@ export default function LiveCallPage() {
                   <button
                     id="end-call-btn"
                     className="btn btn-danger"
-                    onClick={handleEndCall}
+                    onClick={endCall}
                     aria-label="End call"
+                    style={{ flex: 1 }}
                   >
                     <PhoneOff size={14} strokeWidth={2} />
                     End Call
@@ -290,12 +390,13 @@ export default function LiveCallPage() {
                 </>
               )}
 
-              {status === "ended" && (
+              {isEnded && (
                 <button
                   id="new-call-btn"
                   className="btn btn-secondary"
-                  onClick={handleReset}
-                  aria-label="Start a new call"
+                  onClick={resetCall}
+                  aria-label="Start another call"
+                  style={{ flex: 1 }}
                 >
                   New Call
                 </button>
@@ -303,10 +404,10 @@ export default function LiveCallPage() {
             </div>
           </div>
 
-          {/* Recording consent */}
+          {/* Recording Consent Card */}
           <div className="card" style={{ padding: "1.25rem" }}>
             <h2 className="section-title" style={{ marginBottom: "0.75rem" }}>
-              Recording
+              Recording Consent
             </h2>
             <label
               htmlFor="recording-consent"
@@ -314,333 +415,428 @@ export default function LiveCallPage() {
                 display: "flex",
                 alignItems: "flex-start",
                 gap: "0.625rem",
-                cursor: isActive ? "not-allowed" : "pointer",
+                cursor: isActive || isConnecting ? "not-allowed" : "pointer",
               }}
             >
               <input
                 id="recording-consent"
                 type="checkbox"
                 checked={recordingConsent}
-                disabled={isActive}
+                disabled={isActive || isConnecting}
                 onChange={(e) => setRecordingConsent(e.target.checked)}
-                style={{ marginTop: "2px", accentColor: "var(--accent-600)" }}
+                style={{ marginTop: "3px", accentColor: "var(--accent-600)", width: "16px", height: "16px" }}
                 aria-describedby="consent-hint"
               />
               <div>
                 <span
                   style={{
                     fontSize: "var(--font-size-sm)",
-                    fontWeight: 500,
+                    fontWeight: 600,
                     color: "var(--ink-primary)",
                     display: "block",
-                    marginBottom: "0.125rem",
+                    marginBottom: "0.25rem",
                   }}
                 >
-                  Customer has consented to call recording
+                  I confirm customer consent for call recording
                 </span>
                 <span
                   id="consent-hint"
                   style={{
                     fontSize: "var(--font-size-xs)",
                     color: "var(--ink-tertiary)",
+                    lineHeight: 1.4,
+                    display: "block",
                   }}
                 >
-                  Recording will be enabled only with explicit consent. This must
-                  be confirmed before starting the call.
+                  Recording captures both customer microphone and AI responses into a single combined
+                  track. Consent must be explicitly confirmed before starting.
                 </span>
               </div>
             </label>
 
-            {recordingConsent && (
+            {/* Recording active indicator */}
+            {isActive && (
               <div
                 style={{
-                  marginTop: "0.75rem",
+                  marginTop: "0.875rem",
                   padding: "0.5rem 0.75rem",
-                  background: isActive
-                    ? "var(--status-error-bg)"
-                    : "var(--surface-base)",
-                  border: `1px solid ${
-                    isActive
-                      ? "var(--status-error-border)"
-                      : "var(--border-subtle)"
-                  }`,
+                  background: "var(--status-error-bg)",
+                  border: "1px solid var(--status-error-border)",
                   borderRadius: "var(--radius-md)",
                   display: "flex",
                   alignItems: "center",
                   gap: "0.5rem",
                 }}
                 role="status"
-                aria-live="polite"
               >
-                {isActive ? (
-                  <>
-                    <span
-                      style={{
-                        width: "8px",
-                        height: "8px",
-                        borderRadius: "50%",
-                        background: "#dc2626",
-                        flexShrink: 0,
-                        animation: "pulse-dot 1.5s ease-in-out infinite",
-                      }}
-                      aria-hidden="true"
-                    />
-                    <span
-                      style={{
-                        fontSize: "var(--font-size-xs)",
-                        fontWeight: 600,
-                        color: "var(--status-error-ink)",
-                      }}
-                    >
-                      Recording active
-                    </span>
-                  </>
-                ) : (
-                  <span
-                    style={{
-                      fontSize: "var(--font-size-xs)",
-                      color: "var(--ink-tertiary)",
-                    }}
-                  >
-                    Recording will start when the call begins.
-                  </span>
-                )}
+                <span
+                  style={{
+                    width: "8px",
+                    height: "8px",
+                    borderRadius: "50%",
+                    background: "#dc2626",
+                    flexShrink: 0,
+                    animation: "pulse-dot 1.5s ease-in-out infinite",
+                  }}
+                  aria-hidden="true"
+                />
+                <span
+                  style={{
+                    fontSize: "var(--font-size-xs)",
+                    fontWeight: 600,
+                    color: "var(--status-error-ink)",
+                  }}
+                >
+                  Dual-track recording active
+                </span>
               </div>
             )}
           </div>
 
-          {/* Customer details */}
+          {/* Recording Playback & Download Card (when call is ended) */}
+          {isEnded && (
+            <div className="card" style={{ padding: "1.25rem" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: "0.75rem",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <FileAudio size={16} style={{ color: "var(--accent-600)" }} />
+                  <h2 className="section-title">Call Recording</h2>
+                </div>
+                {recording && (
+                  <span
+                    style={{
+                      fontSize: "var(--font-size-xs)",
+                      color: "var(--ink-tertiary)",
+                      fontWeight: 500,
+                    }}
+                  >
+                    {recording.durationSeconds}s · {(recording.sizeBytes / 1024).toFixed(1)} KB
+                  </span>
+                )}
+              </div>
+
+              {recording ? (
+                <div>
+                  <p
+                    style={{
+                      fontSize: "var(--font-size-xs)",
+                      color: "var(--ink-secondary)",
+                      marginBottom: "0.75rem",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    Combined recording includes both customer speech and AI salesperson speech.
+                  </p>
+
+                  <audio
+                    controls
+                    src={recording.url}
+                    style={{ width: "100%", marginBottom: "0.75rem", height: "36px" }}
+                  >
+                    Your browser does not support audio playback.
+                  </audio>
+
+                  <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                    <a
+                      href={recording.url}
+                      download={`voicepilot-call-${new Date().toISOString().slice(0, 10)}.webm`}
+                      className="btn btn-primary btn-sm"
+                      style={{ textDecoration: "none" }}
+                    >
+                      <Download size={13} />
+                      Download Recording (.webm)
+                    </a>
+                  </div>
+
+                  <p
+                    style={{
+                      fontSize: "11px",
+                      color: "var(--ink-disabled)",
+                      marginTop: "0.75rem",
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    * Note: Recording is preserved in your current local browser session for Phase 2.
+                    Cloud persistence to Supabase Storage will be activated in Phase 3.
+                  </p>
+                </div>
+              ) : (
+                <p
+                  style={{
+                    fontSize: "var(--font-size-xs)",
+                    color: "var(--ink-tertiary)",
+                    margin: 0,
+                  }}
+                >
+                  Call ended without a usable recording.
+                </p>
+              )}
+            </div>
+          )}
+
+          {/* Customer Details Form Card */}
           <div className="card" style={{ padding: "1.25rem" }}>
             <h2 className="section-title" style={{ marginBottom: "0.875rem" }}>
-              Customer Details
+              Prospect Details
             </h2>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
               <FieldRow
                 id="customer-name"
-                label="Name"
-                placeholder="Alex Johnson"
+                label="Prospect Name"
+                placeholder="Sarah Chen"
                 icon={<User size={13} />}
                 value={customer.name}
                 onChange={(v) => setCustomer((c) => ({ ...c, name: v }))}
-                disabled={isActive}
+                disabled={isActive || isConnecting}
                 required
               />
               <FieldRow
                 id="customer-company"
                 label="Company"
-                placeholder="Acme Corp"
+                placeholder="Apex Technologies"
                 icon={<Building2 size={13} />}
                 value={customer.company}
                 onChange={(v) => setCustomer((c) => ({ ...c, company: v }))}
-                disabled={isActive}
+                disabled={isActive || isConnecting}
               />
               <FieldRow
                 id="customer-email"
                 label="Email"
-                placeholder="alex@acmecorp.com"
+                placeholder="sarah.chen@apextech.io"
                 type="email"
+                icon={<Mail size={13} />}
                 value={customer.email}
                 onChange={(v) => setCustomer((c) => ({ ...c, email: v }))}
-                disabled={isActive}
-              />
-              <FieldRow
-                id="customer-phone"
-                label="Phone"
-                placeholder="+1 555 000 0000"
-                type="tel"
-                value={customer.phone}
-                onChange={(v) => setCustomer((c) => ({ ...c, phone: v }))}
-                disabled={isActive}
+                disabled={isActive || isConnecting}
               />
               <div className="field-group">
                 <label className="field-label" htmlFor="customer-notes">
-                  Notes
+                  Prospect Context &amp; Needs
                 </label>
                 <textarea
                   id="customer-notes"
                   className="input"
-                  placeholder="Context about this lead — previous interactions, priorities, etc."
+                  rows={2}
                   value={customer.notes}
-                  onChange={(e) =>
-                    setCustomer((c) => ({ ...c, notes: e.target.value }))
-                  }
-                  disabled={isActive}
-                  rows={3}
-                  aria-label="Customer notes"
+                  onChange={(e) => setCustomer((c) => ({ ...c, notes: e.target.value }))}
+                  disabled={isActive || isConnecting}
+                  placeholder="Key background notes the AI can use to personalize the pitch…"
+                  style={{ resize: "vertical", fontSize: "var(--font-size-xs)" }}
                 />
               </div>
             </div>
           </div>
         </div>
 
-        {/* ─── Right column — Transcript ────────────────────────────────── */}
-        <div className="card" style={{ padding: "1.25rem", minHeight: "500px", display: "flex", flexDirection: "column" }}>
+        {/* ─── Right Column: Live Transcript Stream ────────────────────────── */}
+        <div className="card" style={{ padding: "1.25rem", minHeight: "560px", display: "flex", flexDirection: "column" }}>
           <div
             style={{
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
               marginBottom: "1rem",
+              paddingBottom: "0.75rem",
+              borderBottom: "1px solid var(--border-subtle)",
             }}
           >
-            <h2 className="section-title">
-              Live Transcript
-            </h2>
-            {isActive && (
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "0.375rem",
-                  fontSize: "var(--font-size-xs)",
-                  color: "var(--call-live)",
-                  fontWeight: 500,
-                }}
-                aria-live="polite"
-              >
-                <span className="live-dot" aria-hidden="true" />
-                Live
-              </div>
-            )}
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <Volume2 size={16} style={{ color: "var(--accent-600)" }} />
+              <h2 className="section-title">Live Transcript</h2>
+            </div>
+            <span
+              style={{
+                fontSize: "var(--font-size-xs)",
+                color: "var(--ink-tertiary)",
+              }}
+            >
+              {transcript.length} {transcript.length === 1 ? "turn" : "turns"}
+            </span>
           </div>
 
-          {/* Transcript area */}
+          {/* Transcript Scroll Area */}
           <div
             style={{
               flex: 1,
               overflowY: "auto",
               display: "flex",
               flexDirection: "column",
+              gap: "0.875rem",
             }}
-            className="scrollable"
             role="log"
-            aria-label="Call transcript"
             aria-live="polite"
+            aria-label="Conversation transcript"
           >
             {transcript.length === 0 ? (
-              <div className="empty-state" style={{ flex: 1 }}>
-                <MessageSquare
-                  size={32}
-                  className="empty-state-icon"
-                  aria-hidden="true"
-                />
-                <div>
-                  <p
-                    style={{
-                      fontWeight: 600,
-                      fontSize: "var(--font-size-sm)",
-                      color: "var(--ink-secondary)",
-                      marginBottom: "0.25rem",
-                    }}
-                  >
-                    {status === "idle" || status === "ended"
-                      ? "No transcript"
-                      : "Waiting for conversation…"}
-                  </p>
-                  <p
-                    style={{
-                      fontSize: "var(--font-size-xs)",
-                      color: "var(--ink-tertiary)",
-                      margin: 0,
-                    }}
-                  >
-                    {status === "idle"
-                      ? "Start a call to see the live transcript appear here."
-                      : status === "ended"
-                      ? "No conversation was recorded in this session."
-                      : "Transcript will stream here once the voice session connects."}
-                  </p>
-                </div>
-              </div>
-            ) : (
               <div
                 style={{
+                  flex: 1,
                   display: "flex",
                   flexDirection: "column",
-                  gap: "0.75rem",
-                  padding: "0.25rem 0",
-                }}
-              >
-                {transcript.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`transcript-message ${msg.speaker}`}
-                  >
-                    <div className="transcript-bubble">{msg.text}</div>
-                    <div className="transcript-meta">
-                      {msg.speaker === "ai" ? "AI" : "Customer"} ·{" "}
-                      {new Date(msg.timestamp).toLocaleTimeString("en-US", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Disconnected / ended state */}
-          {(status === "idle" || status === "ended") && transcript.length === 0 && (
-            <div
-              style={{
-                marginTop: "1rem",
-                paddingTop: "1rem",
-                borderTop: "1px solid var(--border-subtle)",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-              }}
-            >
-              {status === "ended" ? (
-                <CheckCircle
-                  size={14}
-                  style={{ color: "var(--ink-tertiary)" }}
-                  aria-hidden="true"
-                />
-              ) : null}
-              <span
-                style={{
-                  fontSize: "var(--font-size-xs)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  textAlign: "center",
+                  padding: "2rem 1rem",
                   color: "var(--ink-tertiary)",
                 }}
               >
-                {status === "ended"
-                  ? "Call session closed."
-                  : "No active session."}
-              </span>
-              {status === "ended" && (
-                <Link
-                  href="/history"
+                <Volume2
+                  size={32}
+                  style={{ color: "var(--ink-disabled)", marginBottom: "0.75rem" }}
+                  aria-hidden="true"
+                />
+                <p
                   style={{
-                    marginLeft: "auto",
-                    fontSize: "var(--font-size-xs)",
-                    color: "var(--accent-600)",
-                    fontWeight: 500,
-                    textDecoration: "none",
+                    fontSize: "var(--font-size-sm)",
+                    fontWeight: 600,
+                    color: "var(--ink-secondary)",
+                    marginBottom: "0.25rem",
                   }}
                 >
-                  View History →
-                </Link>
-              )}
+                  {isConnecting
+                    ? "Establishing voice connection…"
+                    : isActive
+                    ? "Listening for speech…"
+                    : "No conversation active"}
+                </p>
+                <p
+                  style={{
+                    fontSize: "var(--font-size-xs)",
+                    color: "var(--ink-tertiary)",
+                    maxWidth: "280px",
+                    margin: 0,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  {isConnecting
+                    ? "Microphone and Gemini Live stream are synchronizing."
+                    : isActive
+                    ? "The AI sales assistant will greet the customer. Speak into your microphone to reply."
+                    : "Confirm customer consent and start the call to view live speech transcription."}
+                </p>
+              </div>
+            ) : (
+              transcript.map((msg) => (
+                <div
+                  key={msg.id}
+                  className={`transcript-message ${msg.speaker}`}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: msg.speaker === "ai" ? "flex-start" : "flex-end",
+                  }}
+                >
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: 600,
+                      color: msg.speaker === "ai" ? "var(--accent-600)" : "var(--ink-secondary)",
+                      marginBottom: "0.25rem",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.375rem",
+                    }}
+                  >
+                    <span>{msg.speaker === "ai" ? "AI Salesperson (Alex)" : customer.name || "Customer"}</span>
+                    {msg.isInterim && (
+                      <span
+                        style={{
+                          fontSize: "10px",
+                          color: "var(--ink-tertiary)",
+                          fontStyle: "italic",
+                        }}
+                      >
+                        (speaking…)
+                      </span>
+                    )}
+                  </div>
+
+                  <div
+                    className="transcript-bubble"
+                    style={{
+                      padding: "0.625rem 0.875rem",
+                      borderRadius: "var(--radius-lg)",
+                      fontSize: "var(--font-size-sm)",
+                      lineHeight: 1.5,
+                      maxWidth: "85%",
+                      background:
+                        msg.speaker === "ai"
+                          ? "var(--surface-base)"
+                          : "var(--accent-50)",
+                      border: `1px solid ${
+                        msg.speaker === "ai"
+                          ? "var(--border-subtle)"
+                          : "var(--accent-200)"
+                      }`,
+                      color: "var(--ink-primary)",
+                      opacity: msg.isInterim ? 0.85 : 1,
+                    }}
+                  >
+                    {msg.text}
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: "10px",
+                      color: "var(--ink-disabled)",
+                      marginTop: "0.25rem",
+                    }}
+                  >
+                    {new Date(msg.timestamp).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                    })}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {/* Footer link to history when ended */}
+          {isEnded && (
+            <div
+              style={{
+                marginTop: "1rem",
+                paddingTop: "0.75rem",
+                borderTop: "1px solid var(--border-subtle)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
+                <CheckCircle2 size={13} style={{ color: "var(--status-success-ink)" }} />
+                <span style={{ fontSize: "var(--font-size-xs)", color: "var(--ink-secondary)" }}>
+                  Call completed and recorded.
+                </span>
+              </div>
+              <Link
+                href="/history"
+                style={{
+                  fontSize: "var(--font-size-xs)",
+                  color: "var(--accent-600)",
+                  fontWeight: 600,
+                  textDecoration: "none",
+                }}
+              >
+                Go to Call History →
+              </Link>
             </div>
           )}
         </div>
       </div>
-
-      {/* Responsive: on narrow screens stack columns */}
-      <style>{`
-        @media (max-width: 768px) {
-          .live-call-grid {
-            grid-template-columns: 1fr !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }
 
-// ─── FieldRow ──────────────────────────────────────────────────────────────
+// ─── FieldRow Component ───────────────────────────────────────────────────
 
 interface FieldRowProps {
   id: string;
@@ -697,6 +893,7 @@ function FieldRow({
         disabled={disabled}
         required={required}
         aria-required={required}
+        style={{ fontSize: "var(--font-size-xs)" }}
       />
     </div>
   );
