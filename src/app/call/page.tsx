@@ -70,12 +70,12 @@ const OUTCOME_STYLES: Record<
   SalesOutcome,
   { bg: string; color: string; border: string }
 > = {
-  converted: { bg: "#ecfdf5", color: "#065f46", border: "#a7f3d0" },
-  interested: { bg: "#eff6ff", color: "#1e40af", border: "#bfdbfe" },
-  demo_requested: { bg: "#f5f3ff", color: "#5b21b6", border: "#ddd6fe" },
-  follow_up_required: { bg: "#fffbeb", color: "#92400e", border: "#fde68a" },
-  not_interested: { bg: "#fef2f2", color: "#991b1b", border: "#fecaca" },
-  no_response: { bg: "#f3f4f6", color: "#374151", border: "#e5e7eb" },
+  converted:          { bg: "rgba(16,185,129,0.12)",  color: "#34d399", border: "rgba(16,185,129,0.25)" },
+  interested:         { bg: "rgba(79,134,247,0.12)",  color: "#60a5fa", border: "rgba(79,134,247,0.25)" },
+  demo_requested:     { bg: "rgba(167,139,250,0.12)", color: "#a78bfa", border: "rgba(167,139,250,0.25)" },
+  follow_up_required: { bg: "rgba(245,158,11,0.12)",  color: "#fbbf24", border: "rgba(245,158,11,0.25)" },
+  not_interested:     { bg: "rgba(239,68,68,0.12)",   color: "#f87171", border: "rgba(239,68,68,0.25)" },
+  no_response:        { bg: "rgba(100,116,139,0.12)", color: "#94a3b8", border: "rgba(100,116,139,0.25)" },
 };
 
 // ─── Default customer ──────────────────────────────────────────────────────
@@ -262,10 +262,13 @@ export default function LiveCallPage() {
           }}
         >
           <div>
-            <h1 className="page-title">Live Call Studio</h1>
+            <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <Phone size={24} style={{ color: "var(--accent-400)" }} />
+              Live Call Studio
+            </h1>
             <p className="page-description">
               Real-time voice sales assistant — Active campaign:{" "}
-              <strong>{productConfig.name}</strong>
+              <strong style={{ color: "var(--ink-primary)" }}>{productConfig.name}</strong>
             </p>
           </div>
           <div
@@ -275,13 +278,13 @@ export default function LiveCallPage() {
               gap: "0.5rem",
               fontSize: "var(--font-size-xs)",
               color: "var(--ink-secondary)",
-              background: "var(--surface-base)",
+              background: "var(--surface-elevated)",
               padding: "0.375rem 0.75rem",
               borderRadius: "var(--radius-md)",
-              border: "1px solid var(--border-subtle)",
+              border: "1px solid var(--border-default)",
             }}
           >
-            <Sparkles size={13} style={{ color: "var(--accent-600)" }} />
+            <Sparkles size={13} style={{ color: "var(--accent-400)" }} />
             <span>Gemini Live Voice Engine</span>
           </div>
         </div>
@@ -553,8 +556,8 @@ export default function LiveCallPage() {
                   <div
                     style={{
                       padding: "0.75rem 0.875rem",
-                      background: "#ecfdf5",
-                      border: "1px solid #a7f3d0",
+                      background: "var(--status-success-bg)",
+                      border: "1px solid var(--status-success-border)",
                       borderRadius: "var(--radius-md)",
                       display: "flex",
                       alignItems: "center",
@@ -564,8 +567,8 @@ export default function LiveCallPage() {
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <CheckCircle2 size={15} style={{ color: "#059669", flexShrink: 0 }} />
-                      <span style={{ fontSize: "var(--font-size-xs)", fontWeight: 600, color: "#065f46" }}>
+                      <CheckCircle2 size={15} style={{ color: "var(--status-success-ink)", flexShrink: 0 }} />
+                      <span style={{ fontSize: "var(--font-size-xs)", fontWeight: 600, color: "var(--status-success-ink)" }}>
                         Saved to Supabase database &amp; private storage
                       </span>
                     </div>
@@ -573,7 +576,7 @@ export default function LiveCallPage() {
                       href="/history"
                       style={{
                         fontSize: "var(--font-size-xs)",
-                        color: "var(--accent-600)",
+                        color: "var(--accent-400)",
                         fontWeight: 600,
                         textDecoration: "none",
                         display: "flex",
@@ -590,15 +593,15 @@ export default function LiveCallPage() {
                   <div
                     style={{
                       padding: "0.75rem 0.875rem",
-                      background: "#fffbeb",
-                      border: "1px solid #fde68a",
+                      background: "var(--status-warning-bg)",
+                      border: "1px solid var(--status-warning-border)",
                       borderRadius: "var(--radius-md)",
                     }}
                   >
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "0.5rem", flexWrap: "wrap" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        <AlertCircle size={15} style={{ color: "#d97706", flexShrink: 0 }} />
-                        <span style={{ fontSize: "var(--font-size-xs)", color: "#92400e", fontWeight: 600 }}>
+                        <AlertCircle size={15} style={{ color: "var(--status-warning-ink)", flexShrink: 0 }} />
+                        <span style={{ fontSize: "var(--font-size-xs)", color: "var(--status-warning-ink)", fontWeight: 600 }}>
                           Partially Saved
                         </span>
                       </div>
@@ -615,7 +618,7 @@ export default function LiveCallPage() {
                       )}
                     </div>
                     {saveNotice && (
-                      <p style={{ fontSize: "11px", color: "#92400e", margin: "0.375rem 0 0 0", lineHeight: 1.4 }}>
+                      <p style={{ fontSize: "11px", color: "var(--status-warning-ink)", margin: "0.375rem 0 0 0", lineHeight: 1.4 }}>
                         {saveNotice}
                       </p>
                     )}
@@ -836,7 +839,7 @@ export default function LiveCallPage() {
                     width: "8px",
                     height: "8px",
                     borderRadius: "50%",
-                    background: "#dc2626",
+                    background: "var(--status-error-ink)",
                     flexShrink: 0,
                     animation: "pulse-dot 1.5s ease-in-out infinite",
                   }}
@@ -1251,7 +1254,7 @@ function FieldRow({
         )}
         {label}
         {required && (
-          <span aria-label="required" style={{ color: "#dc2626", marginLeft: "2px" }}>
+          <span aria-label="required" style={{ color: "var(--status-error-ink)", marginLeft: "2px" }}>
             *
           </span>
         )}

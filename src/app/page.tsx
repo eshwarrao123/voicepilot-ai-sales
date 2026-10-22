@@ -4,15 +4,13 @@ import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   Phone,
-  History,
-  Settings,
-  TrendingUp,
-  Users,
-  CheckCircle2,
-  ArrowRight,
   RefreshCw,
   AlertCircle,
   FileAudio,
+  ArrowRight,
+  TrendingUp,
+  Users,
+  CheckCircle2,
 } from "lucide-react";
 import type { CallRecord, DbCallRecord, SalesOutcome } from "@/types";
 import { SALES_OUTCOME_LABELS } from "@/types";
@@ -26,14 +24,14 @@ import {
 
 const OUTCOME_STYLES: Record<
   SalesOutcome,
-  { bg: string; color: string; border: string }
+  { bg: string; text: string; border: string }
 > = {
-  converted: { bg: "#ecfdf5", color: "#065f46", border: "#a7f3d0" },
-  interested: { bg: "#eff6ff", color: "#1e40af", border: "#bfdbfe" },
-  demo_requested: { bg: "#f5f3ff", color: "#5b21b6", border: "#ddd6fe" },
-  follow_up_required: { bg: "#fffbeb", color: "#92400e", border: "#fde68a" },
-  not_interested: { bg: "#fef2f2", color: "#991b1b", border: "#fecaca" },
-  no_response: { bg: "#f3f4f6", color: "#374151", border: "#e5e7eb" },
+  converted:          { bg: "#f0fdf4", text: "#166534", border: "#bbf7d0" },
+  interested:         { bg: "#eff6ff", text: "#1d4ed8", border: "#bfdbfe" },
+  demo_requested:     { bg: "#f5f3ff", text: "#6d28d9", border: "#ddd6fe" },
+  follow_up_required: { bg: "#fffbeb", text: "#92400e", border: "#fde68a" },
+  not_interested:     { bg: "#fef2f2", text: "#991b1b", border: "#fecaca" },
+  no_response:        { bg: "#f9f9f8", text: "#52524e", border: "#e5e5e3" },
 };
 
 export default function OverviewPage() {
@@ -59,7 +57,7 @@ export default function OverviewPage() {
         const authErr = getLastAuthError();
         setError(
           authErr
-            ? `Supabase authentication unavailable: ${authErr}`
+            ? `Authentication unavailable: ${authErr}`
             : "Unable to establish anonymous session."
         );
         setLoading(false);
@@ -78,9 +76,7 @@ export default function OverviewPage() {
         .select("*")
         .order("created_at", { ascending: false });
 
-      if (queryError) {
-        throw new Error(queryError.message);
-      }
+      if (queryError) throw new Error(queryError.message);
 
       const mapped = ((data || []) as DbCallRecord[]).map(dbRecordToCallRecord);
       setRecords(mapped);
@@ -104,7 +100,7 @@ export default function OverviewPage() {
           const authErr = getLastAuthError();
           setError(
             authErr
-              ? `Supabase authentication unavailable: ${authErr}`
+              ? `Authentication unavailable: ${authErr}`
               : "Unable to establish anonymous session."
           );
           setLoading(false);
@@ -124,9 +120,7 @@ export default function OverviewPage() {
           .order("created_at", { ascending: false });
 
         if (!isMounted) return;
-        if (queryError) {
-          throw new Error(queryError.message);
-        }
+        if (queryError) throw new Error(queryError.message);
 
         const mapped = ((data || []) as DbCallRecord[]).map(dbRecordToCallRecord);
         setRecords(mapped);
@@ -140,24 +134,16 @@ export default function OverviewPage() {
     }
 
     void init();
-    return () => {
-      isMounted = false;
-    };
+    return () => { isMounted = false; };
   }, []);
 
-  // Derived metrics from actual persisted records
-  const totalCalls = records.length;
-  const convertedCalls = records.filter((r) => r.outcome === "converted").length;
-  const conversionRate =
-    totalCalls > 0 ? `${((convertedCalls / totalCalls) * 100).toFixed(1)}%` : "0.0%";
-  const interestedLeads = records.filter(
-    (r) => r.outcome === "interested" || r.outcome === "demo_requested"
-  ).length;
-  const followUpsNeeded = records.filter(
-    (r) => r.outcome === "follow_up_required"
-  ).length;
-
-  const recentCalls = records.slice(0, 5);
+  // Derived metrics
+  const totalCalls       = records.length;
+  const convertedCalls   = records.filter((r) => r.outcome === "converted").length;
+  const conversionRate   = totalCalls > 0 ? `${((convertedCalls / totalCalls) * 100).toFixed(1)}%` : "—";
+  const interestedLeads  = records.filter((r) => r.outcome === "interested" || r.outcome === "demo_requested").length;
+  const followUpsNeeded  = records.filter((r) => r.outcome === "follow_up_required").length;
+  const recentCalls      = records.slice(0, 5);
 
   function formatDuration(secs: number): string {
     const m = Math.floor(secs / 60);
@@ -168,148 +154,73 @@ export default function OverviewPage() {
   function formatDate(iso: string): string {
     try {
       const d = new Date(iso);
-      return d.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      });
-    } catch {
-      return iso;
-    }
+      return d.toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    } catch { return iso; }
   }
 
   return (
     <div className="page-container">
-      {/* Page header */}
+      {/* ─── Page header ────────────────────────────────────────────────── */}
       <header className="page-header">
-        <div
-          style={{
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "space-between",
-            gap: "1rem",
-            flexWrap: "wrap",
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "1rem", flexWrap: "wrap" }}>
           <div>
             <h1 className="page-title">Overview</h1>
             <p className="page-description">
-              Real-time sales intelligence and activity metrics derived from your completed calls.
+              Sales activity and real-time intelligence from completed conversations
             </p>
           </div>
-          <button
-            onClick={() => void fetchOverviewData({ forceRetry: true })}
-            disabled={loading}
-            className="btn btn-secondary btn-sm"
-            aria-label="Refresh dashboard data"
-          >
-            <RefreshCw size={13} className={loading ? "spin" : ""} />
-            Refresh
-          </button>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <button
+              onClick={() => void fetchOverviewData({ forceRetry: true })}
+              disabled={loading}
+              className="btn btn-secondary btn-sm"
+              aria-label="Refresh dashboard data"
+            >
+              <RefreshCw size={13} className={loading ? "spin" : ""} />
+              Refresh
+            </button>
+            <Link href="/call" className="btn btn-primary" id="start-call-cta">
+              <Phone size={14} strokeWidth={2} />
+              Open Call Studio
+            </Link>
+          </div>
         </div>
       </header>
 
-      {/* Unconfigured Alert */}
+      {/* ─── Alerts ─────────────────────────────────────────────────────── */}
       {unconfigured && (
-        <div
-          role="alert"
-          style={{
-            marginBottom: "1.5rem",
-            padding: "1rem 1.25rem",
-            background: "var(--surface-base)",
-            border: "1px solid var(--border-subtle)",
-            borderRadius: "var(--radius-lg)",
-            display: "flex",
-            gap: "0.75rem",
-            alignItems: "flex-start",
-          }}
-        >
-          <AlertCircle size={18} style={{ color: "var(--ink-secondary)", flexShrink: 0, marginTop: "2px" }} />
+        <div className="alert alert-info" style={{ marginBottom: "1.5rem" }}>
+          <AlertCircle size={16} style={{ flexShrink: 0, marginTop: "1px" }} />
           <div>
-            <p style={{ fontSize: "var(--font-size-sm)", fontWeight: 600, color: "var(--ink-primary)", margin: "0 0 0.25rem" }}>
+            <p style={{ fontWeight: 600, margin: "0 0 0.25rem", fontSize: "var(--font-size-sm)", color: "var(--ink-primary)" }}>
               Supabase Not Configured
             </p>
-            <p style={{ fontSize: "var(--font-size-xs)", color: "var(--ink-tertiary)", margin: 0, lineHeight: 1.5 }}>
-              Dashboard metrics and persistent history require Supabase credentials. Configure{" "}
-              <code>NEXT_PUBLIC_SUPABASE_URL</code> and <code>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code> (or <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code>) to enable live activity calculation.
+            <p style={{ margin: 0, fontSize: "var(--font-size-xs)", color: "var(--ink-secondary)" }}>
+              Dashboard metrics require Supabase credentials. Set{" "}
+              <code style={{ padding: "0.125rem 0.25rem", background: "var(--surface-sunken)", borderRadius: "3px", fontSize: "11px" }}>NEXT_PUBLIC_SUPABASE_URL</code> and{" "}
+              <code style={{ padding: "0.125rem 0.25rem", background: "var(--surface-sunken)", borderRadius: "3px", fontSize: "11px" }}>NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY</code> to enable persistent call storage.
             </p>
           </div>
         </div>
       )}
 
-      {/* Error Alert */}
       {error && (
-        <div
-          role="alert"
-          style={{
-            marginBottom: "1.5rem",
-            padding: "0.875rem 1rem",
-            background: "var(--status-error-bg)",
-            border: "1px solid var(--status-error-border)",
-            borderRadius: "var(--radius-md)",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
+        <div className="alert alert-error" style={{ marginBottom: "1.5rem", justifyContent: "space-between" }}>
           <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-            <AlertCircle size={16} style={{ color: "var(--status-error-ink)" }} />
-            <span style={{ fontSize: "var(--font-size-xs)", color: "var(--status-error-ink)" }}>{error}</span>
+            <AlertCircle size={15} style={{ flexShrink: 0 }} />
+            <span style={{ fontSize: "var(--font-size-sm)" }}>{error}</span>
           </div>
           <button
             onClick={() => void fetchOverviewData({ forceRetry: true })}
             className="btn btn-secondary btn-sm"
-            style={{ height: "26px", fontSize: "11px" }}
+            style={{ flexShrink: 0 }}
           >
             Retry
           </button>
         </div>
       )}
 
-      {/* Quick action banner */}
-      <div
-        style={{
-          marginBottom: "2rem",
-          padding: "1.25rem 1.5rem",
-          background: "var(--accent-50)",
-          border: "1px solid var(--accent-200)",
-          borderRadius: "var(--radius-xl)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "1rem",
-          flexWrap: "wrap",
-        }}
-      >
-        <div>
-          <h2
-            style={{
-              fontSize: "var(--font-size-base)",
-              fontWeight: 600,
-              color: "var(--ink-primary)",
-              marginBottom: "0.25rem",
-            }}
-          >
-            Start a new sales conversation
-          </h2>
-          <p
-            style={{
-              fontSize: "var(--font-size-sm)",
-              color: "var(--ink-tertiary)",
-              margin: 0,
-            }}
-          >
-            Launch the Live Call Studio to speak directly with prospects via Gemini Live.
-          </p>
-        </div>
-        <Link href="/call" className="btn btn-primary btn-lg" id="start-call-cta">
-          <Phone size={16} strokeWidth={2} />
-          Open Live Call
-        </Link>
-      </div>
-
-      {/* Metric cards */}
+      {/* ─── Metric strip ────────────────────────────────────────────────── */}
       <section aria-labelledby="metrics-heading" style={{ marginBottom: "2rem" }}>
         <h2 id="metrics-heading" className="section-title" style={{ marginBottom: "0.75rem" }}>
           Activity Metrics
@@ -317,102 +228,75 @@ export default function OverviewPage() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
-            gap: "0.75rem",
+            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+            gap: "1px",
+            background: "var(--border-subtle)",
+            border: "1px solid var(--border-subtle)",
+            borderRadius: "var(--radius-lg)",
+            overflow: "hidden",
           }}
         >
-          <MetricCard
+          <MetricCell
             label="Total Calls"
-            icon={<Phone size={16} />}
-            value={totalCalls}
-            loading={loading}
+            icon={<Phone size={14} />}
+            value={loading ? null : totalCalls}
           />
-          <MetricCard
+          <MetricCell
             label="Conversion Rate"
-            icon={<TrendingUp size={16} />}
-            value={conversionRate}
-            loading={loading}
+            icon={<TrendingUp size={14} />}
+            value={loading ? null : conversionRate}
           />
-          <MetricCard
+          <MetricCell
             label="Interested Leads"
-            icon={<Users size={16} />}
-            value={interestedLeads}
-            loading={loading}
+            icon={<Users size={14} />}
+            value={loading ? null : interestedLeads}
           />
-          <MetricCard
+          <MetricCell
             label="Follow-ups Needed"
-            icon={<CheckCircle2 size={16} />}
-            value={followUpsNeeded}
-            loading={loading}
+            icon={<CheckCircle2 size={14} />}
+            value={loading ? null : followUpsNeeded}
           />
         </div>
-        <p
-          style={{
-            marginTop: "0.75rem",
-            fontSize: "var(--font-size-xs)",
-            color: "var(--ink-disabled)",
-          }}
-        >
-          Metrics are computed live from your private, RLS-protected database records.
-        </p>
       </section>
 
-      <div
-        style={{
-          height: "1px",
-          background: "var(--border-subtle)",
-          margin: "1.5rem 0",
-        }}
-      />
-
-      {/* Recent calls */}
+      {/* ─── Recent calls ────────────────────────────────────────────────── */}
       <section aria-labelledby="recent-heading" style={{ marginBottom: "2rem" }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: "0.75rem",
-            gap: "0.5rem",
-            flexWrap: "wrap",
-          }}
-        >
-          <h2 id="recent-heading" className="section-title">
-            Recent Calls
-          </h2>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "0.75rem", gap: "0.5rem", flexWrap: "wrap" }}>
+          <h2 id="recent-heading" className="section-title">Recent Calls</h2>
           <Link href="/history" className="btn btn-secondary btn-sm" id="view-all-calls">
-            View all ({totalCalls})
+            View all {totalCalls > 0 && `(${totalCalls})`}
             <ArrowRight size={12} strokeWidth={2} />
           </Link>
         </div>
 
         {recentCalls.length === 0 ? (
-          <div className="card">
+          <div className="card" style={{ padding: "2.5rem 1.5rem" }}>
             <div className="empty-state">
-              <History size={36} className="empty-state-icon" aria-hidden="true" />
+              <div
+                style={{
+                  width: "48px",
+                  height: "48px",
+                  borderRadius: "var(--radius-lg)",
+                  background: "var(--surface-sunken)",
+                  border: "1px solid var(--border-subtle)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginBottom: "0.5rem",
+                }}
+              >
+                <Phone size={22} style={{ color: "var(--ink-disabled)" }} aria-hidden="true" />
+              </div>
               <div>
-                <p
-                  style={{
-                    fontWeight: 600,
-                    color: "var(--ink-primary)",
-                    fontSize: "var(--font-size-sm)",
-                    marginBottom: "0.25rem",
-                  }}
-                >
-                  No calls yet
+                <p style={{ fontWeight: 600, color: "var(--ink-primary)", fontSize: "var(--font-size-sm)", marginBottom: "0.25rem" }}>
+                  No calls recorded yet
                 </p>
-                <p
-                  style={{
-                    fontSize: "var(--font-size-sm)",
-                    color: "var(--ink-tertiary)",
-                    margin: 0,
-                  }}
-                >
-                  Start a conversation in Live Call Studio to see real records and metrics here.
+                <p style={{ fontSize: "var(--font-size-sm)", color: "var(--ink-tertiary)", margin: "0 0 1rem" }}>
+                  Start a conversation to see real call records and metrics here.
                 </p>
               </div>
               <Link href="/call" className="btn btn-primary" id="empty-start-call">
-                <Phone size={14} strokeWidth={2} />
+                <Phone size={13} strokeWidth={2} />
                 Start a Call
               </Link>
             </div>
@@ -421,84 +305,73 @@ export default function OverviewPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
             {recentCalls.map((call) => {
               const outcomeStyle = call.outcome ? OUTCOME_STYLES[call.outcome] : undefined;
-
               return (
                 <Link
                   key={call.id}
                   href="/history"
-                  className="card"
+                  className="call-row"
                   style={{
-                    padding: "0.875rem 1.25rem",
+                    padding: "0.875rem 1rem",
                     textDecoration: "none",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "space-between",
                     gap: "1rem",
                     flexWrap: "wrap",
-                    transition: "border-color 0.15s ease",
                   }}
+                  aria-label={`Call with ${call.customer.name || "Prospect"}`}
                 >
-                  <div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <span style={{ fontSize: "var(--font-size-sm)", fontWeight: 600, color: "var(--ink-primary)" }}>
-                        {call.customer.name || "Prospect"}
-                      </span>
-                      {call.customer.company && (
-                        <span style={{ fontSize: "var(--font-size-xs)", color: "var(--ink-tertiary)" }}>
-                          &bull; {call.customer.company}
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", minWidth: 0, flex: 1 }}>
+                    <div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "2px" }}>
+                        <span style={{ fontSize: "var(--font-size-sm)", fontWeight: 600, color: "var(--ink-primary)" }}>
+                          {call.customer.name || "Prospect"}
                         </span>
-                      )}
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "2px" }}>
-                      <span style={{ fontSize: "11px", color: "var(--ink-tertiary)" }}>
-                        {formatDate(call.createdAt || call.startedAt)}
-                      </span>
-                      <span style={{ fontSize: "11px", color: "var(--ink-tertiary)" }}>&bull;</span>
-                      <span style={{ fontSize: "11px", color: "var(--ink-tertiary)" }}>
-                        {formatDuration(call.durationSeconds)}
-                      </span>
-                      {call.productName && (
-                        <>
-                          <span style={{ fontSize: "11px", color: "var(--ink-tertiary)" }}>&bull;</span>
-                          <span style={{ fontSize: "11px", color: "var(--ink-tertiary)" }}>
-                            {call.productName}
-                          </span>
-                        </>
-                      )}
+                        {call.customer.company && (
+                          <>
+                            <span style={{ fontSize: "var(--font-size-xs)", color: "var(--ink-disabled)" }}>·</span>
+                            <span style={{ fontSize: "var(--font-size-xs)", color: "var(--ink-tertiary)" }}>
+                              {call.customer.company}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "var(--font-size-xs)", color: "var(--ink-tertiary)" }}>
+                        <span>{formatDate(call.createdAt || call.startedAt)}</span>
+                        <span style={{ color: "var(--ink-disabled)" }}>·</span>
+                        <span>{formatDuration(call.durationSeconds)}</span>
+                        {call.productName && (
+                          <>
+                            <span style={{ color: "var(--ink-disabled)" }}>·</span>
+                            <span>{call.productName}</span>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexShrink: 0 }}>
                     {call.recordingPath && (
-                      <span
-                        title="Recording stored in private bucket"
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "0.25rem",
-                          fontSize: "11px",
-                          color: "var(--accent-600)",
-                        }}
-                      >
-                        <FileAudio size={12} />
+                      <span title="Recording available">
+                        <FileAudio size={13} style={{ color: "var(--accent-primary)" }} aria-label="Recording available" />
                       </span>
                     )}
                     {call.outcome && outcomeStyle && (
                       <span
                         style={{
-                          padding: "0.15rem 0.5rem",
+                          padding: "0.125rem 0.5rem",
                           borderRadius: "9999px",
                           fontSize: "11px",
                           fontWeight: 600,
                           background: outcomeStyle.bg,
-                          color: outcomeStyle.color,
+                          color: outcomeStyle.text,
                           border: `1px solid ${outcomeStyle.border}`,
                         }}
                       >
                         {SALES_OUTCOME_LABELS[call.outcome]}
                       </span>
                     )}
-                    <ArrowRight size={14} style={{ color: "var(--ink-tertiary)" }} />
+                    <ArrowRight size={14} style={{ color: "var(--ink-disabled)" }} />
                   </div>
                 </Link>
               );
@@ -506,143 +379,52 @@ export default function OverviewPage() {
           </div>
         )}
       </section>
+    </div>
+  );
+}
 
-      <div
-        style={{
-          height: "1px",
-          background: "var(--border-subtle)",
-          margin: "1.5rem 0",
-        }}
-      />
+// ─── Sub-components ──────────────────────────────────────────────────────────
 
-      {/* Quick-access cards */}
-      <section aria-labelledby="quick-access-heading">
-        <h2 id="quick-access-heading" className="section-title" style={{ marginBottom: "0.75rem" }}>
-          Quick Access
-        </h2>
+interface MetricCellProps {
+  label: string;
+  icon: React.ReactNode;
+  value?: string | number | null;
+}
+
+function MetricCell({ label, icon, value }: MetricCellProps) {
+  const isLoading = value === null;
+  return (
+    <div
+      style={{
+        background: "var(--surface-raised)",
+        padding: "1rem 1.125rem",
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.5rem",
+      }}
+      aria-label={label}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: "0.375rem" }}>
+        <span style={{ color: "var(--ink-tertiary)", display: "flex" }}>{icon}</span>
+        <span className="label" style={{ fontSize: "var(--font-size-xs)", color: "var(--ink-secondary)" }}>
+          {label}
+        </span>
+      </div>
+      {isLoading ? (
+        <div className="skeleton" style={{ width: "3rem", height: "1.75rem" }} aria-label="Loading metric" />
+      ) : (
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-            gap: "0.75rem",
+            fontSize: "var(--font-size-3xl)",
+            fontWeight: 700,
+            color: "var(--ink-primary)",
+            lineHeight: 1,
+            fontVariantNumeric: "tabular-nums",
           }}
         >
-          <QuickLink
-            href="/call"
-            icon={<Phone size={18} strokeWidth={1.8} />}
-            label="Live Call"
-            description="Start or manage an active AI sales call."
-            id="quick-live-call"
-          />
-          <QuickLink
-            href="/history"
-            icon={<History size={18} strokeWidth={1.8} />}
-            label="Call History"
-            description="Review transcripts, private recordings, and outcomes."
-            id="quick-history"
-          />
-          <QuickLink
-            href="/setup"
-            icon={<Settings size={18} strokeWidth={1.8} />}
-            label="Product Setup"
-            description="Configure the FlowDesk product knowledge for the AI."
-            id="quick-setup"
-          />
+          {value}
         </div>
-      </section>
-    </div>
-  );
-}
-
-// ─── Sub-components ────────────────────────────────────────────────────────
-
-interface MetricCardProps {
-  label: string;
-  icon: React.ReactNode;
-  value?: string | number;
-  loading?: boolean;
-}
-
-function MetricCard({ label, icon, value, loading }: MetricCardProps) {
-  return (
-    <div className="card" style={{ padding: "1rem 1.25rem" }} aria-label={label}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.5rem",
-          marginBottom: "0.75rem",
-          color: "var(--ink-tertiary)",
-        }}
-      >
-        {icon}
-        <span className="label">{label}</span>
-      </div>
-      {loading ? (
-        <div
-          style={{
-            width: "2.5rem",
-            height: "1.5rem",
-            background: "var(--surface-base)",
-            borderRadius: "var(--radius-sm)",
-            animation: "pulse 1.5s ease-in-out infinite",
-          }}
-          aria-label="Loading metric"
-        />
-      ) : (
-        <div className="stat-value">{value}</div>
       )}
     </div>
-  );
-}
-
-interface QuickLinkProps {
-  href: string;
-  icon: React.ReactNode;
-  label: string;
-  description: string;
-  id: string;
-}
-
-function QuickLink({ href, icon, label, description, id }: QuickLinkProps) {
-  return (
-    <Link
-      href={href}
-      id={id}
-      className="card quick-link"
-      style={{ textDecoration: "none", display: "block" }}
-    >
-      <div
-        style={{
-          padding: "1rem 1.25rem",
-          display: "flex",
-          flexDirection: "column",
-          gap: "0.5rem",
-        }}
-      >
-        <div style={{ color: "var(--accent-600)" }}>{icon}</div>
-        <div>
-          <div
-            style={{
-              fontSize: "var(--font-size-sm)",
-              fontWeight: 600,
-              color: "var(--ink-primary)",
-              marginBottom: "0.2rem",
-            }}
-          >
-            {label}
-          </div>
-          <div
-            style={{
-              fontSize: "var(--font-size-xs)",
-              color: "var(--ink-tertiary)",
-              lineHeight: 1.45,
-            }}
-          >
-            {description}
-          </div>
-        </div>
-      </div>
-    </Link>
   );
 }

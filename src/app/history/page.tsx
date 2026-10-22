@@ -17,6 +17,7 @@ import {
   XCircle,
   Play,
   RotateCcw,
+  History as HistoryIcon,
 } from "lucide-react";
 import type { CallRecord, DbCallRecord, SalesOutcome, AnalysisStatus } from "@/types";
 import { SALES_OUTCOME_LABELS } from "@/types";
@@ -34,21 +35,21 @@ const OUTCOME_STYLES: Record<
   SalesOutcome,
   { bg: string; color: string; border: string }
 > = {
-  converted: { bg: "#ecfdf5", color: "#065f46", border: "#a7f3d0" },
-  interested: { bg: "#eff6ff", color: "#1e40af", border: "#bfdbfe" },
-  demo_requested: { bg: "#f5f3ff", color: "#5b21b6", border: "#ddd6fe" },
-  follow_up_required: { bg: "#fffbeb", color: "#92400e", border: "#fde68a" },
-  not_interested: { bg: "#fef2f2", color: "#991b1b", border: "#fecaca" },
-  no_response: { bg: "#f3f4f6", color: "#374151", border: "#e5e7eb" },
+  converted:          { bg: "rgba(16,185,129,0.12)",  color: "#34d399", border: "rgba(16,185,129,0.25)" },
+  interested:         { bg: "rgba(79,134,247,0.12)",  color: "#60a5fa", border: "rgba(79,134,247,0.25)" },
+  demo_requested:     { bg: "rgba(167,139,250,0.12)", color: "#a78bfa", border: "rgba(167,139,250,0.25)" },
+  follow_up_required: { bg: "rgba(245,158,11,0.12)",  color: "#fbbf24", border: "rgba(245,158,11,0.25)" },
+  not_interested:     { bg: "rgba(239,68,68,0.12)",   color: "#f87171", border: "rgba(239,68,68,0.25)" },
+  no_response:        { bg: "rgba(100,116,139,0.12)", color: "#94a3b8", border: "rgba(100,116,139,0.25)" },
 };
 
 const STATUS_BADGES: Record<
   AnalysisStatus,
   { label: string; bg: string; color: string }
 > = {
-  complete: { label: "Analyzed", bg: "#f0fdf4", color: "#15803d" },
-  pending: { label: "Pending", bg: "#fffbeb", color: "#b45309" },
-  failed: { label: "Analysis Failed", bg: "#fef2f2", color: "#b91c1c" },
+  complete: { label: "Analyzed",        bg: "rgba(16,185,129,0.12)",  color: "#34d399" },
+  pending:  { label: "Pending",         bg: "rgba(245,158,11,0.12)",  color: "#fbbf24" },
+  failed:   { label: "Analysis Failed", bg: "rgba(239,68,68,0.12)",   color: "#f87171" },
 };
 
 type DateFilter = "all" | "today" | "week" | "month";
@@ -294,7 +295,10 @@ export default function HistoryPage() {
           }}
         >
           <div>
-            <h1 className="page-title">Call History</h1>
+            <h1 className="page-title" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <HistoryIcon size={24} style={{ color: "var(--accent-400)" }} />
+              Call History
+            </h1>
             <p className="page-description">
               Transcripts, private audio recordings, summaries, and outcomes from completed AI sales calls.
             </p>
@@ -815,9 +819,9 @@ export default function HistoryPage() {
                                   fontSize: "11px",
                                   padding: "0.2rem 0.5rem",
                                   borderRadius: "4px",
-                                  background: "#fef2f2",
-                                  border: "1px solid #fecaca",
-                                  color: "#991b1b",
+                                  background: "var(--status-error-bg)",
+                                  border: "1px solid var(--status-error-border)",
+                                  color: "var(--status-error-ink)",
                                 }}
                               >
                                 {obj}
@@ -844,8 +848,8 @@ export default function HistoryPage() {
                     <div
                       style={{
                         padding: "0.875rem 1rem",
-                        background: "#fffbeb",
-                        border: "1px solid #fde68a",
+                        background: "var(--status-warning-bg)",
+                        border: "1px solid var(--status-warning-border)",
                         borderRadius: "var(--radius-md)",
                         display: "flex",
                         alignItems: "center",
@@ -855,8 +859,8 @@ export default function HistoryPage() {
                       }}
                     >
                       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        <AlertCircle size={15} style={{ color: "#d97706" }} />
-                        <span style={{ fontSize: "var(--font-size-xs)", color: "#92400e" }}>
+                        <AlertCircle size={15} style={{ color: "var(--status-warning-ink)" }} />
+                        <span style={{ fontSize: "var(--font-size-xs)", color: "var(--status-warning-ink)" }}>
                           AI analysis was not completed for this call.
                         </span>
                       </div>

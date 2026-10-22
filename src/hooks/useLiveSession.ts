@@ -119,10 +119,13 @@ export function useLiveSession() {
     }
 
     // Incremental chunk: determine if a space separator is required
+    // Check the ORIGINAL chunk for leading whitespace before trimming
+    const chunkHadLeadingSpace = chunk.length > 0 && /^\s/.test(chunk);
     const needsSpace =
       currentText.length > 0 &&
+      !chunkHadLeadingSpace &&
       !/[\s([{/-]$/.test(currentText) &&
-      !/^[\s,.:;!?)\]}/-]/.test(chunk);
+      !/^[\s,.:;!?)\]}/-]/.test(trimmedChunk);
 
     return `${currentText}${needsSpace ? " " : ""}${trimmedChunk}`;
   };
