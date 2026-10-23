@@ -50,6 +50,8 @@ test.describe("VoicePilot — Environment and Route Behavior", () => {
 
     // Verify stale "Phase 1 — Interface only" text is absent
     await expect(sidebar.getByText(/Phase 1 — Interface only/i)).not.toBeVisible();
-    await expect(sidebar.getByText(/Voice Engine & Storage Active/i)).toBeVisible();
+    // Verify current status shows Voice Engine Ready
+    await expect(sidebar.getByText(/Voice Engine Ready/i)).toBeVisible();
+    await expect(sidebar.getByText(/Gemini Live/i)).toBeVisible();
   });
 });

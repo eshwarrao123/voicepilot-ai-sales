@@ -127,13 +127,27 @@ export async function saveCompletedCall(params: SaveCallParams): Promise<Persist
         analysisError = "Analysis endpoint returned unexpected data format.";
       }
     } else {
+      // Normalize error response for user display
       const errData = await analysisRes.json().catch(() => ({}));
-      analysisError = errData.error || `Analysis request failed with status ${analysisRes.status}.`;
+      
+      // Extract meaningful message from structured provider errors
+      if (errData.error && typeof errData.error === 'object') {
+        const providerError = errData.error as { message?: string; status?: string; code?: number };
+        if (providerError.status === "UNAVAILABLE" || analysisRes.status === 503) {
+          analysisError = "AI analysis temporarily unavailable due to high demand. Your call and recording are saved.";
+        } else if (analysisRes.status === 429) {
+          analysisError = "Rate limit reached. Please wait before analyzing another call.";
+        } else {
+          analysisError = providerError.message || `Analysis failed (${analysisRes.status})`;
+        }
+      } else {
+        analysisError = errData.error || `Analysis request failed with status ${analysisRes.status}.`;
+      }
     }
   } catch (err: unknown) {
     const e = err as { message?: string };
     console.warn("Exception requesting AI analysis:", e);
-    analysisError = e.message || "Failed to contact analysis server.";
+    analysisError = "Failed to contact analysis server. Your call and recording are saved.";
   }
 
   // 5. Insert call record into Supabase PostgreSQL
@@ -234,6 +248,27 @@ export async function retryCallAnalysis(
 
     if (!analysisRes.ok) {
       const errData = await analysisRes.json().catch(() => ({}));
+      
+      // Normalize error messages for user display
+      if (errData.error && typeof errData.error === 'object') {
+        const providerError = errData.error as { message?: string; status?: string };
+        if (providerError.status === "UNAVAILABLE" || analysisRes.status === 503) {
+          return {
+            success: false,
+            error: "AI analysis temporarily unavailable due to high demand. Please try again in a moment.",
+          };
+        } else if (analysisRes.status === 429) {
+          return {
+            success: false,
+            error: "Rate limit reached. Please wait before retrying.",
+          };
+        }
+        return {
+          success: false,
+          error: providerError.message || `Analysis failed (${analysisRes.status})`,
+        };
+      }
+      
       return {
         success: false,
         error: errData.error || `Analysis failed with HTTP ${analysisRes.status}`,

@@ -6,10 +6,10 @@ test.describe("Call Persistence & Navigation", () => {
     await page.goto("/");
     await expect(page.getByRole("heading", { name: "Overview" })).toBeVisible();
 
-    // 2. Navigate to Live Call Studio
-    await page.click("#quick-live-call");
+    // 2. Navigate to Live Call Studio via primary CTA
+    await page.click("#start-call-cta");
     await expect(page).toHaveURL(/\/call/);
-    await expect(page.getByRole("heading", { name: "Live Call Studio" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Live Call Studio|Call Studio/i })).toBeVisible();
 
     // 3. Navigate to Call History
     await page.click("nav.sidebar >> text=Call History");

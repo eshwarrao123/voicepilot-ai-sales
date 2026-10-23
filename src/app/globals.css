@@ -537,8 +537,21 @@ textarea.input { resize: vertical; min-height: 5rem; }
   }
 }
 
+/* ─── Live call grid ────────────────────────────────────────────────────────── */
+.live-call-grid {
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.2fr);
+}
+
+/* ─── Metrics grid ──────────────────────────────────────────────────────────── */
+.metrics-grid {
+  grid-template-columns: repeat(4, 1fr);
+}
+
 /* ─── Mobile responsive ─────────────────────────────────────────────────────────── */
 @media (max-width: 768px) {
+  .app-shell {
+    flex-direction: column;
+  }
   .sidebar {
     display: none;
   }
@@ -547,5 +560,18 @@ textarea.input { resize: vertical; min-height: 5rem; }
   }
   .stat-value {
     font-size: var(--font-size-2xl);
+  }
+  .live-call-grid {
+    grid-template-columns: 1fr;
+  }
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ─── Tablet responsive (between mobile and desktop) ──────────────────────────── */
+@media (min-width: 769px) and (max-width: 900px) {
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }

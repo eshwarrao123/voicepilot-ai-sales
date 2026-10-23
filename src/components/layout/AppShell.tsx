@@ -148,11 +148,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               gap: "0.375rem",
             }}
           >
-            <Zap size={11} style={{ color: "var(--ink-disabled)" }} />
+            <Zap size={11} style={{ color: "var(--ink-tertiary)" }} />
             <p
               style={{
                 fontSize: "10px",
-                color: "var(--ink-disabled)",
+                color: "var(--ink-tertiary)",
                 lineHeight: 1.4,
                 margin: 0,
                 fontWeight: 500,

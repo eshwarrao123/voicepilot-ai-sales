@@ -226,9 +226,9 @@ export default function OverviewPage() {
           Activity Metrics
         </h2>
         <div
+          className="metrics-grid"
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
             gap: "1px",
             background: "var(--border-subtle)",
             border: "1px solid var(--border-subtle)",

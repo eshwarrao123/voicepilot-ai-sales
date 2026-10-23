@@ -359,7 +359,6 @@ export default function LiveCallPage() {
         className="live-call-grid"
         style={{
           display: "grid",
-          gridTemplateColumns: "minmax(0, 1.05fr) minmax(0, 1.2fr)",
           gap: "1.25rem",
           alignItems: "start",
         }}
