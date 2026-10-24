@@ -1,3 +1,4 @@
+Here is the Deployed link of application : https://voicepilot-ai-sales.vercel.app/
 # VoicePilot — AI Sales Studio
 
 VoicePilot is a complete, data-driven AI voice sales application built for the Sankar Group internship assessment. It conducts genuine, bidirectional real-time voice conversations with prospects, displays live transcripts, records dual-participant audio with consent, securely persists call records and private recordings in Supabase under Row Level Security, generates structured post-call intelligence using Gemini, and provides real activity metrics and call history.
